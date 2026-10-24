@@ -1,0 +1,216 @@
+// DISABLED LEGACY GOOGLE SHEETS INTEGRATION — retained as commented reference only.
+// The active app now uses Supabase Auth + PostgreSQL; these functions are not imported.
+// No code in this archive is compiled or executed.
+// import type { Book, BookStatus } from '@/types'
+//
+// /**
+//  * Column contract shared by the website and the Google Sheet.
+//  *
+//  * The first block is what the site reads and writes. `Copies on loan`,
+//  * `Available copies` and `Status` are derived (availability is never stored as
+//  * editable truth) — the site writes them back so the sheet stays truthful.
+//  */
+// export const SHEET_COLUMNS = [
+//   'Book ID',
+//   'Title',
+//   'Author',
+//   'ISBN',
+//   'Publisher',
+//   'Year',
+//   'Category',
+//   'Shelf',
+//   'Total copies',
+//   'Copies on loan',
+//   'Available copies',
+//   'Status',
+//   'Added',
+//   'Description',
+//   'Last edited from',
+//   'Last edited at',
+// ] as const
+//
+// export type SheetColumn = (typeof SHEET_COLUMNS)[number]
+//
+// /** Tolerant header matching: "Book ID", "book_id", "BOOK-ID" all normalise to "bookid". */
+// export function normaliseHeader(value: string): string {
+//   return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+// }
+//
+// const HEADER_ALIASES: Record<SheetColumn, string[]> = {
+//   'Book ID': ['bookid', 'id', 'bookcode', 'accessionno'],
+//   Title: ['title', 'booktitle', 'name'],
+//   Author: ['author', 'authors', 'authorname'],
+//   ISBN: ['isbn', 'isbn13', 'isbn10'],
+//   Publisher: ['publisher', 'publication'],
+//   Year: ['year', 'publicationyear', 'publishedyear', 'pubyear'],
+//   Category: ['category', 'genre', 'subject', 'department'],
+//   Shelf: ['shelf', 'shelflocation', 'location', 'rack'],
+//   'Total copies': ['totalcopies', 'copies', 'totals', 'qty', 'quantity', 'total'],
+//   'Copies on loan': ['copiesonloan', 'onloan', 'issued', 'out'],
+//   'Available copies': ['availablecopies', 'available', 'instock'],
+//   Status: ['status', 'recordstatus'],
+//   Added: ['added', 'addedat', 'dateadded', 'created'],
+//   Description: ['description', 'summary', 'notes', 'blurb'],
+//   'Last edited from': ['lasteditedfrom', 'editedfrom', 'source', 'lastsource', 'editedby'],
+//   'Last edited at': ['lasteditedat', 'lastedited', 'updatedat', 'modified'],
+// }
+//
+// export type ColumnIndex = Partial<Record<SheetColumn, number>>
+//
+// /** Map a header row to column positions. Missing columns are simply absent. */
+// export function buildColumnIndex(header: string[]): ColumnIndex {
+//   const index: ColumnIndex = {}
+//   const normalised = header.map(normaliseHeader)
+//   ;(Object.keys(HEADER_ALIASES) as SheetColumn[]).forEach((column) => {
+//     const aliases = HEADER_ALIASES[column]
+//     const found = normalised.findIndex((cell) => aliases.includes(cell))
+//     if (found >= 0) index[column] = found
+//   })
+//   return index
+// }
+//
+// function cell(row: string[] | undefined, index: ColumnIndex, column: SheetColumn): string {
+//   if (!row) return ''
+//   const position = index[column]
+//   if (position === undefined) return ''
+//   return (row[position] ?? '').trim()
+// }
+//
+// /** Stable small hash so a sheet row without an ID still maps to the same book every sync. */
+// export function hashString(value: string): number {
+//   let hash = 2166136261
+//   for (let i = 0; i < value.length; i += 1) {
+//     hash ^= value.charCodeAt(i)
+//     hash = Math.imul(hash, 16777619)
+//   }
+//   return Math.abs(hash)
+// }
+//
+// export function derivedBookId(title: string, author: string, isbn: string): string {
+//   const seed = `${title}|${author}|${isbn}`.toLowerCase()
+//   return `BK-S${(hashString(seed) % 100000).toString(36).toUpperCase().padStart(4, '0')}`
+// }
+//
+// export function parseStatus(value: string): BookStatus {
+//   const normalised = value.trim().toLowerCase()
+//   if (['archived', 'inactive', 'removed', 'deleted', 'withdrawn'].includes(normalised)) return 'archived'
+//   return 'active'
+// }
+//
+// function parseYear(value: string): number {
+//   const match = value.match(/\d{4}/)
+//   return match ? Number(match[0]) : 0
+// }
+//
+// function parseCopies(value: string): number {
+//   const parsed = Number(value.replace(/[^\d.]/g, ''))
+//   if (!Number.isFinite(parsed) || parsed < 0) return 1
+//   return Math.max(1, Math.round(parsed))
+// }
+//
+// function parseDate(value: string): string {
+//   if (!value) return ''
+//   const parsed = new Date(value)
+//   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString()
+// }
+//
+// /** Which side last touched the row, according to the sheet's own column. */
+// export function parseSyncSource(value: string): Book['syncSource'] {
+//   const normalised = value.trim().toLowerCase()
+//   if (!normalised) return undefined
+//   if (normalised.startsWith('web') || normalised.includes('site')) return 'website'
+//   if (normalised.startsWith('sheet') || normalised.startsWith('google')) return 'sheet'
+//   return undefined
+// }
+//
+// /**
+//  * Convert one sheet row into a Book. Returns null for blank/header-ish rows so a
+//  * half-filled sheet never injects empty records into the catalogue.
+//  */
+// export function rowToBook(row: string[], index: ColumnIndex, rowNumber: number): Book | null {
+//   if (!row || row.length === 0) return null
+//   const title = cell(row, index, 'Title')
+//   if (!title || normaliseHeader(title) === 'title') return null
+//
+//   const author = cell(row, index, 'Author') || 'Unknown author'
+//   const isbn = cell(row, index, 'ISBN')
+//   const rawId = cell(row, index, 'Book ID')
+//   const id = rawId || derivedBookId(title, author, isbn)
+//   const added = parseDate(cell(row, index, 'Added'))
+//
+//   return {
+//     id,
+//     title,
+//     author,
+//     isbn,
+//     publisher: cell(row, index, 'Publisher'),
+//     year: parseYear(cell(row, index, 'Year')),
+//     category: cell(row, index, 'Category') || 'General',
+//     description: cell(row, index, 'Description'),
+//     shelf: cell(row, index, 'Shelf'),
+//     totalCopies: parseCopies(cell(row, index, 'Total copies')),
+//     status: parseStatus(cell(row, index, 'Status')),
+//     addedAt: added || new Date().toISOString(),
+//     coverSeed: (hashString(id) % 900) + 100,
+//     tags: ['google-sheet'],
+//     syncSource: parseSyncSource(cell(row, index, 'Last edited from')) ?? 'sheet',
+//     syncUpdatedAt: parseDate(cell(row, index, 'Last edited at')) || undefined,
+//     sheetRow: rowNumber,
+//   }
+// }
+//
+// /** Parse a whole CSV matrix into books, skipping the header row. */
+// export function csvToBooks(rows: string[][]): { books: Book[]; skipped: number; index: ColumnIndex } {
+//   if (rows.length === 0) return { books: [], skipped: 0, index: {} }
+//   const index = buildColumnIndex(rows[0])
+//   const books: Book[] = []
+//   let skipped = 0
+//   rows.slice(1).forEach((row, offset) => {
+//     if (row.every((value) => value.trim() === '')) return
+//     const book = rowToBook(row, index, offset + 2)
+//     if (book) books.push(book)
+//     else skipped += 1
+//   })
+//   return { books, skipped, index }
+// }
+//
+// /** Fields the sheet is allowed to overwrite on the website (sheet wins). */
+// export const SHEET_OWNED_FIELDS = [
+//   'title',
+//   'author',
+//   'isbn',
+//   'publisher',
+//   'year',
+//   'category',
+//   'description',
+//   'shelf',
+//   'totalCopies',
+//   'status',
+// ] as const
+//
+// export type SheetOwnedField = (typeof SHEET_OWNED_FIELDS)[number]
+//
+// /** Record that goes up to the Apps Script endpoint. Keys are canonical column names. */
+// export function bookToSheetRecord(book: Book): Record<string, string | number> {
+//   return {
+//     'Book ID': book.id,
+//     Title: book.title,
+//     Author: book.author,
+//     ISBN: book.isbn,
+//     Publisher: book.publisher,
+//     Year: book.year || '',
+//     Category: book.category,
+//     Shelf: book.shelf,
+//     'Total copies': book.totalCopies,
+//     Status: book.status === 'archived' ? 'Archived' : 'Active',
+//     Added: book.addedAt,
+//     Description: book.description,
+//     'Last edited from': 'Website',
+//   }
+// }
+//
+// export function formatDateTime(iso: string): string {
+//   const date = new Date(iso)
+//   if (Number.isNaN(date.getTime())) return iso
+//   return `${date.toISOString().slice(0, 10)} ${date.toISOString().slice(11, 16)} UTC`
+// }

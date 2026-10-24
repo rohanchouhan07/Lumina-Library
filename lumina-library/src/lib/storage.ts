@@ -134,10 +134,6 @@ function sanitizeBook(raw: unknown): Book | null {
     addedAt: str(raw.addedAt, new Date().toISOString()),
     coverSeed: num(raw.coverSeed, 1),
     tags: Array.isArray(raw.tags) ? raw.tags.filter((t): t is string => typeof t === 'string') : [],
-    // Google Sheets provenance survives reloads; unknown values are dropped rather than guessed.
-    syncSource: raw.syncSource === 'sheet' || raw.syncSource === 'website' ? raw.syncSource : undefined,
-    syncUpdatedAt: typeof raw.syncUpdatedAt === 'string' ? raw.syncUpdatedAt : undefined,
-    sheetRow: typeof raw.sheetRow === 'number' ? raw.sheetRow : undefined,
   }
 }
 

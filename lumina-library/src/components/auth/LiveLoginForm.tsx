@@ -11,13 +11,8 @@ import { Field, Input } from '@/components/ui/Field'
 import { InlineAlert } from '@/components/ui/Feedback'
 
 const loginSchema = z.object({
-  identifier: z
-    .string()
-    .trim()
-    .min(3, 'Enter your email address or institutional ID')
-    .refine((value) => /\S/.test(value), 'Enter your email address or institutional ID'),
+  identifier: z.string().trim().email('Enter a valid email address'),
   password: z.string().min(6, 'Passwords are at least 6 characters'),
-  remember: z.boolean(),
 })
 
 type LoginValues = z.infer<typeof loginSchema>
@@ -35,7 +30,7 @@ export function LiveLoginForm({ onSignedIn }: { onSignedIn: () => void }) {
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { identifier: '', password: '', remember: true },
+    defaultValues: { identifier: '', password: '' },
     mode: 'onSubmit',
   })
 
@@ -45,13 +40,12 @@ export function LiveLoginForm({ onSignedIn }: { onSignedIn: () => void }) {
     const result = await loginWithPassword({
       identifier: values.identifier.trim(),
       password: values.password,
-      remember: values.remember,
     })
     if (!result.ok) {
       setFormError(result.error)
       return
     }
-    toast.success('Signed in', 'Your session is verified by the library server.')
+    toast.success('Signed in', 'Your session is verified by Supabase Auth.')
     onSignedIn()
   })
 
@@ -63,23 +57,23 @@ export function LiveLoginForm({ onSignedIn }: { onSignedIn: () => void }) {
     >
       <h2 className="text-[17px] font-semibold tracking-tight text-fg">Sign in to Lumina Library</h2>
       <p className="mt-1 text-[12.5px] text-fg-muted">
-        Use your institutional email or member ID. Credentials are checked by the library server.
+        Sign in with the email and password created for your Supabase Auth account.
       </p>
 
       <form onSubmit={submit} className="mt-4 space-y-3.5" noValidate>
-        <Field label="Email or institutional ID" required error={errors.identifier?.message}>
+        <Field label="Email address" required error={errors.identifier?.message}>
           {(fieldProps) => (
             <div className="relative">
               <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-faint" aria-hidden="true" />
               <Input
                 {...fieldProps}
                 {...register('identifier')}
-                type="text"
+                type="email"
                 inputMode="email"
                 autoComplete="username"
                 autoCapitalize="none"
                 spellCheck={false}
-                placeholder="you@lumina.edu or M-1004"
+                placeholder="you@institution.edu"
                 className="pl-9.5"
                 disabled={isSubmitting}
               />
@@ -113,15 +107,6 @@ export function LiveLoginForm({ onSignedIn }: { onSignedIn: () => void }) {
           )}
         </Field>
 
-        <label className="flex cursor-pointer items-center gap-2 select-none">
-          <input
-            type="checkbox"
-            {...register('remember')}
-            className="size-3.5 rounded border-white/20 bg-white/[0.04] accent-[#5B8CFF]"
-          />
-          <span className="text-[12px] text-fg-soft">Keep me signed in on this device</span>
-        </label>
-
         {(formError || authError) && (
           <InlineAlert tone="danger" title="Could not sign in">
             {formError ?? authError}
@@ -135,13 +120,12 @@ export function LiveLoginForm({ onSignedIn }: { onSignedIn: () => void }) {
           disabled={isSubmitting}
           leftIcon={isSubmitting ? <Loader2 className="animate-spin" /> : <LogIn />}
         >
-          {isSubmitting ? 'Verifying credentials…' : 'Sign in'}
+          {isSubmitting ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
 
       <p className="mt-3 text-[11px] leading-relaxed text-fg-faint">
-        Accounts are created by a library administrator. There is no public sign-up. Passwords are stored as salted
-        hashes by the Apps Script backend — never in this browser.
+        Accounts are created by a library administrator. Public sign-up is disabled. Supabase Auth manages password hashing and session tokens; this browser tab keeps a temporary session that clears when the tab closes.
       </p>
     </motion.div>
   )

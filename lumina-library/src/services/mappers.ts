@@ -52,9 +52,7 @@ export function toBook(book: ApiBook): Book {
     status: book.recordStatus === 'ARCHIVED' ? 'archived' : 'active',
     addedAt: book.createdAt || new Date().toISOString(),
     coverSeed: seedFromId(book.bookId),
-    tags: ['sheet'],
-    syncSource: 'sheet',
-    syncUpdatedAt: book.updatedAt || undefined,
+    tags: [],
     coverImageUrl: book.coverImageUrl || undefined,
   }
 }
@@ -113,6 +111,7 @@ export function toReservation(reservation: ApiReservation): Reservation {
 
 const ACTIVITY_KIND: Record<string, ActivityKind> = {
   'book.created': 'book.created',
+  'book.deleted': 'book.deleted',
   'book.updated': 'book.updated',
   'book.archived': 'book.archived',
   'book.restored': 'book.updated',
@@ -131,8 +130,6 @@ const ACTIVITY_KIND: Record<string, ActivityKind> = {
   'reservation.fulfilled': 'reservation.fulfilled',
   'reservation.expired': 'reservation.expired',
   'settings.updated': 'config.updated',
-  'auth.login': 'sheet.sync',
-  'auth.logout': 'sheet.sync',
 }
 
 export function toActivity(entry: ApiActivity, users: Member[]): ActivityEntry {
@@ -140,7 +137,7 @@ export function toActivity(entry: ApiActivity, users: Member[]): ActivityEntry {
   return {
     id: entry.activityId,
     at: entry.timestamp,
-    kind: ACTIVITY_KIND[entry.action] ?? 'sheet.sync',
+    kind: ACTIVITY_KIND[entry.action] ?? 'book.updated',
     message: entry.summary,
     actor: actor?.name ?? (entry.actorUserId === 'SYSTEM' ? 'System' : entry.actorUserId),
     bookId: entry.entityType === 'book' ? entry.entityId : undefined,

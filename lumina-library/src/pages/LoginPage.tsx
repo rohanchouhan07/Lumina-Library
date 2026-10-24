@@ -125,7 +125,7 @@ export function LoginPage() {
           <div className="hidden lg:block">
             <Badge tone="brand">
               <Sparkles className="size-3" aria-hidden="true" />
-              {mode === 'live' ? 'Connected to Google Sheets' : 'Offline demo access'}
+              {mode === 'live' ? 'Connected to Supabase' : 'Offline demo access'}
             </Badge>
             <h1 className="mt-4 font-display text-[clamp(2.2rem,4vw,3.2rem)] leading-[1.03] font-semibold tracking-tight">
               {mode === 'live' ? (
@@ -140,15 +140,15 @@ export function LoginPage() {
             </h1>
             <p className="mt-3 max-w-md text-[14px] leading-relaxed text-fg-muted">
               {mode === 'live'
-                ? 'Credentials are verified by the library server, the role is read from your account, and every change is written back to the library spreadsheet.'
-                : 'Each role opens a different workspace built on the same live dataset. Switch at any time — the demo keeps your changes in this browser.'}
+                ? 'Supabase Auth verifies your email and password. Your role is loaded from the protected profile row, and PostgreSQL validates it for every operation.'
+                : 'Each role opens a different workspace built on the same sample dataset. Switch at any time — the demo keeps your changes in this browser.'}
             </p>
 
             <ul className="mt-6 space-y-2.5">
               {(mode === 'live'
                 ? [
-                    'Email or institutional ID, verified server-side',
-                    'Role, availability and fines come from the sheet',
+                    'Email and password, verified by Supabase Auth',
+                    'Role, availability and simulated fines enforced in PostgreSQL',
                     'Failed writes surface an error — never a false success',
                   ]
                 : [
@@ -173,7 +173,7 @@ export function LoginPage() {
               </div>
               <p className="mt-1 text-[11.5px] leading-relaxed text-fg-muted">
                 {mode === 'live'
-                  ? 'Passwords are salted and hashed with iterated HMAC-SHA256 inside Apps Script — real hashing, but not a production identity provider. Sessions are opaque tokens stored in the sheet.'
+                  ? 'Supabase Auth handles password hashing and session tokens. PostgreSQL Row Level Security blocks direct table access; the app uses one role-checked RPC, and account administration runs in a server-side Edge Function.'
                   : 'Role selection only changes what the interface allows in this prototype. A production system would validate sessions on a server.'}
               </p>
             </div>

@@ -293,7 +293,7 @@ export function LandingPage() {
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-[11.5px] text-fg-faint" data-testid="stats-source">
                 {shownStats
-                  ? 'Live figures from the library spreadsheet · counts, never member details'
+                  ? 'Live aggregate counts from Supabase · no member or loan details'
                   : publicFailed
                     ? 'Could not reach the library server · the figures below are not available right now'
                     : publicUnsupported
@@ -320,7 +320,7 @@ export function LandingPage() {
               ...(shownStats
                 ? [
                     { label: 'Total book copies', value: shownStats.totalCopies, hint: `${shownStats.totalTitles} unique titles` },
-                    { label: 'Registered members', value: shownStats.members, hint: 'Accounts on the sheet' },
+                    { label: 'Registered members', value: shownStats.members, hint: 'Active accounts' },
                     { label: 'Books issued now', value: shownStats.activeLoans, hint: 'Copies currently out' },
                     { label: 'Available today', value: shownStats.availableCopies, hint: 'Ready to borrow' },
                   ]
@@ -401,7 +401,7 @@ export function LandingPage() {
               </h2>
               <p className="relative mx-auto mt-3 max-w-lg text-[14px] leading-relaxed text-fg-muted">
                 {IS_API_CONFIGURED
-                  ? 'Sign in with your library credentials and pick up the real workflow — catalogue, circulation, holds and analytics, backed by the library spreadsheet.'
+                  ? 'Sign in with your Supabase Auth account and use the real workflow — catalogue, circulation, holds and analytics, backed by PostgreSQL.'
                   : 'Choose a demo role and explore the full workflow — catalogue management, circulation, holds and analytics, all running locally in your browser.'}
               </p>
               <div className="relative mt-6 flex flex-wrap items-center justify-center gap-2.5">
@@ -499,7 +499,7 @@ function FeaturesSection() {
           <SectionHeading
             eyebrow="Platform"
             title="Six workflows that carry the whole library."
-            description="From the first search to the final report, every step is connected to the same dataset — no duplicated spreadsheets, no stale numbers."
+            description="From the first search to the final report, every workflow reads the same database — no duplicate records, no stale numbers."
             className="max-w-3xl"
           />
         </Reveal>
@@ -801,7 +801,7 @@ function HowItWorks() {
               </span>
               <p className="max-w-xl text-[12px] leading-relaxed text-fg-muted">
                 {IS_API_CONFIGURED
-                  ? 'Records come from the library spreadsheet through the Apps Script API. Fines are simulated at ₹5 per overdue day and are never charged.'
+                  ? 'Records come from Supabase PostgreSQL through a role-checked RPC. Fines are simulated at ₹5 per overdue day and are never charged.'
                   : 'Everything runs on local demo data. Fines are simulated at ₹5 per overdue day and are not real charges. Sign in with any demo role to explore all three experiences.'}
               </p>
             </div>

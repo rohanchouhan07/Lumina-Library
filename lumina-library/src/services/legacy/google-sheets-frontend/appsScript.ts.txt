@@ -1,0 +1,31 @@
+// DISABLED LEGACY GOOGLE SHEETS INTEGRATION — retained as commented reference only.
+// The active app now uses Supabase Auth + PostgreSQL; these functions are not imported.
+// No code in this archive is compiled or executed.
+// import scriptSource from '../../../google-sheets/Code.gs?raw'
+//
+// /**
+//  * Single source of truth for the Apps Script bridge: the code shown in
+//  * Settings is the exact file in `google-sheets/Code.gs`.
+//  */
+// export const APPS_SCRIPT_SOURCE = scriptSource
+//
+// export const APPS_SCRIPT_STEPS = [
+//   {
+//     title: 'Open Extensions → Apps Script in your sheet',
+//     detail: 'From the spreadsheet menu bar, choose Extensions → Apps Script. A project bound to this spreadsheet opens.',
+//   },
+//   {
+//     title: 'Replace the sample code with the bridge below',
+//     detail: 'Select everything in Code.gs, paste the Lumina bridge, then save (Ctrl/⌘ + S). The code only touches this spreadsheet.',
+//   },
+//   {
+//     title: 'Deploy → New deployment → Web app',
+//     detail:
+//       'Click Deploy → New deployment, pick the gear icon → Web app. Set “Execute as: Me” and “Who has access: Anyone”, then Deploy and authorise the script.',
+//   },
+//   {
+//     title: 'Paste the /exec URL into the field above',
+//     detail:
+//       'Copy the Web app URL (it ends with /exec) into “Apps Script Web App URL”. Settings save automatically — press Test connection, then Sync now.',
+//   },
+// ]

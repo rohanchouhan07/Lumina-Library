@@ -191,7 +191,7 @@ export function CatalogPage() {
               <EmptyState
                 icon={<BookOpen />}
                 title="Loading the catalogue"
-                description="Fetching titles from the library spreadsheet — the first request after a quiet spell can take a few seconds."
+                description="Fetching the public catalogue from Supabase. This first request can take a few seconds."
               />
             ) : (
               <EmptyState
@@ -248,7 +248,7 @@ export function CatalogPage() {
 
         <p className="mt-10 text-center text-[11px] text-fg-faint">
           {IS_API_CONFIGURED
-            ? 'Catalogue read from the library spreadsheet · availability reflects active loans'
+            ? 'Catalogue read from Supabase · availability reflects active loans'
             : 'Sample catalogue supplied with the Lumina demo · availability reflects active demo loans'}
         </p>
       </div>

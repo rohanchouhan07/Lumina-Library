@@ -1,4 +1,4 @@
-# Netlify build for the SPA. Set VITE_API_BASE_URL in Site settings → Environment variables.
+# Netlify build for the SPA. For a live Supabase build, set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in Site settings → Environment variables.
 [build]
   command = "npm run build"
   publish = "dist"

@@ -1,3 +1,7 @@
+> **ARCHIVED LEGACY DOCUMENT — Google Sheets / Apps Script.** The active app now uses Supabase Auth + PostgreSQL. Do not follow these old setup/API instructions for a new connection; use [SUPABASE-SETUP.md](SUPABASE-SETUP.md) instead. The historical Apps Script source and Google Sheet are retained untouched for reference/rollback.
+
+---
+
 # Accounts: rotate the admin password, and add a librarian or a student
 
 Everything below is for **your** deployment (`admin@gmail.com`, API v2.2.0). Three ways to

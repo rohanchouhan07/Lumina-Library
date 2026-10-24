@@ -91,13 +91,12 @@ export function PasswordPanel() {
         {!IS_API_CONFIGURED ? (
           <InlineAlert tone="info" title="No server in demo mode">
             The offline demo has no accounts, so there is no password to change. Connect the
-            Apps Script backend to manage real credentials.
+            Supabase Auth to manage real credentials.
           </InlineAlert>
         ) : (
           <form onSubmit={submit} className="space-y-3" noValidate>
             <p className="text-[12px] leading-relaxed text-fg-muted">
-              Changing your password signs out every other device. It is re-hashed with a new salt on the
-              server — nothing is stored in this browser.
+              Supabase Auth verifies your current password and securely updates it. The password itself is sent only to Supabase Auth; no custom password hash is stored by Lumina.
             </p>
 
             <Field label="Current password" required error={errors.currentPassword?.message}>

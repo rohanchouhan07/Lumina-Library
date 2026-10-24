@@ -1,3 +1,7 @@
+> **ARCHIVED LEGACY API DOCUMENT — Apps Script v2.2.1.** The current frontend uses `supabase.rpc('lumina_api', …)` and Supabase Auth. See [SUPABASE-SETUP.md](../SUPABASE-SETUP.md) for the active setup.
+
+---
+
 # Lumina Library — API reference (Apps Script backend v2.2.1)
 
 The browser never talks to Google Sheets directly. It posts a single JSON body to the

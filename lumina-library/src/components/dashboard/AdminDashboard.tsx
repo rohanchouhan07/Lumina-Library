@@ -89,7 +89,7 @@ export function AdminDashboard() {
           height={252}
           isEmpty={!analytics.hasData}
           summary={`Issued ${analytics.circulation.reduce((s, m) => s + m.issued, 0)} and returned ${analytics.circulation.reduce((s, m) => s + m.returned, 0)} loans over six months.`}
-          action={<Badge tone="outline">{mode === 'live' ? 'Google Sheets' : 'Demo data'}</Badge>}
+          action={<Badge tone="outline">{mode === 'live' ? 'Supabase' : 'Demo data'}</Badge>}
         >
           <CirculationChart data={analytics.circulation} />
         </ChartFrame>
@@ -235,7 +235,7 @@ export function AdminDashboard() {
         Snapshot generated {formatDate(new Date().toISOString())} · period {formatMonthKeyLong(analytics.buckets[0].key)} –{' '}
         {formatMonthKeyLong(analytics.buckets[analytics.buckets.length - 1].key)} ·{' '}
         {mode === 'live'
-          ? 'figures read from the library spreadsheet through the API'
+          ? 'figures read from Supabase PostgreSQL through the role-checked API'
           : 'all figures come from the local demo dataset'}.
       </p>
     </div>

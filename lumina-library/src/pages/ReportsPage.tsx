@@ -185,7 +185,7 @@ export function ReportsPage() {
       />
 
       <InlineAlert tone="info">
-        {mode === 'live' ? 'All figures are computed from the records in the library spreadsheet' : 'All figures are generated from the seeded demo records'} ({data.books.length} titles, {data.members.length}{' '}
+        {mode === 'live' ? 'All figures are computed from the records in Supabase PostgreSQL' : 'All figures are generated from the seeded demo records'} ({data.books.length} titles, {data.members.length}{' '}
         members, {data.loans.length} loans). They are sample values for this prototype, not institutional statistics.
       </InlineAlert>
 

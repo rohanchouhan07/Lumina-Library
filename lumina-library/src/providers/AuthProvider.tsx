@@ -8,7 +8,8 @@ import { IS_API_CONFIGURED } from '@/config/env'
 import type { ApiUser } from '@/types/api'
 import { ApiError } from '@/types/api'
 import * as authService from '@/services/authService'
-import { describeApiError, isSessionExpired, setSessionToken } from '@/services/apiClient'
+import { describeApiError, isSessionExpired } from '@/services/apiClient'
+import { getSupabaseClient } from '@/services/supabaseClient'
 import { mapRole, toMember } from '@/services/mappers'
 import { useLibrary } from './LibraryProvider'
 
@@ -19,11 +20,10 @@ export type LoginResult = { ok: true } | { ok: false; error: string }
 export interface LiveLoginInput {
   identifier: string
   password: string
-  remember: boolean
 }
 
 interface AuthContextValue {
-  /** 'live' = credentials verified by the Apps Script backend, 'demo' = offline seeded demo. */
+  /** 'live' = credentials verified by Supabase Auth, 'demo' = offline seeded demo. */
   mode: AuthMode
   /** True while restoring a stored session / finishing a live sign-in. */
   booting: boolean
@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         // Expired/invalid token: clear it and let the login screen take over.
         if (error instanceof ApiError && (error.code === 'UNAUTHORIZED' || error.code === 'FORBIDDEN')) {
-          setSessionToken(null)
+          void authService.logout()
         } else if (!isSessionExpired(error)) {
           setAuthError(describeApiError(error))
         }
@@ -109,6 +109,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Runs once per mount: session restore must not loop when the user object changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Supabase can expire or revoke a refresh token outside the explicit logout flow.
+  // Keep protected routes in sync without trusting a browser-stored role.
+  useEffect(() => {
+    if (!IS_API_CONFIGURED) return
+    const { data: { subscription } } = getSupabaseClient().auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setLiveUser(null)
+        setSession(null)
+        setActiveUserId(null)
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [setActiveUserId])
 
   const loginWithPassword = useCallback<AuthContextValue['loginWithPassword']>(
     async (input) => {
@@ -131,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         const message = describeApiError(error)
         setAuthError(message)
-        setSessionToken(null)
+        void authService.logout()
         setLiveUser(null)
         return { ok: false, error: message }
       }

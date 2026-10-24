@@ -1,3 +1,7 @@
+> **ARCHIVED LEGACY DOCUMENT — Google Sheets / Apps Script.** The active app now uses Supabase Auth + PostgreSQL. Do not follow these old setup/API instructions for a new connection; use [SUPABASE-SETUP.md](SUPABASE-SETUP.md) instead. The historical Apps Script source and Google Sheet are retained untouched for reference/rollback.
+
+---
+
 # Lumina Library — final report
 
 **Date:** 2026-10-23 · **Scope:** the addendum that moved the app onto a

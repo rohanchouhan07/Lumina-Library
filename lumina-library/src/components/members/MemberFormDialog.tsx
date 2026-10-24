@@ -79,7 +79,7 @@ export function MemberFormDialog({
   const submit = handleSubmit(async (values) => {
     setFormError(null)
     if (mode === 'live' && !values.institutionalId?.trim()) {
-      setFormError('An institutional ID is required — it is what the member uses to sign in alongside their email.')
+      setFormError('An institutional ID is required for the library profile; sign-in uses the member email.')
       return
     }
     const payload = {
@@ -120,7 +120,7 @@ export function MemberFormDialog({
         isEdit
           ? 'Membership changes apply immediately to circulation eligibility.'
           : mode === 'live'
-            ? 'Creates a real account in the library sheet. The member signs in with this email and the initial password you set.'
+            ? 'Creates a Supabase Auth account and library profile. The member signs in with this email and the initial password you set.'
             : 'Members can borrow as soon as they are active. No real personal data is required for this demo.'
       }
       size="lg"

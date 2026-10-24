@@ -15,16 +15,6 @@ export default defineConfig({
     port: 5173,
     // Allow the sandbox preview host (and any custom host used for the demo).
     allowedHosts: true,
-    // Dev-only convenience: when VITE_API_BASE_URL is a relative "/api", forward
-    // it to the local contract mock so the preview inside the sandbox works.
-    // A real deployment uses the absolute Apps Script /exec URL and no proxy.
-    proxy: {
-      '/api': {
-        target: process.env.LUMINA_PROXY_TARGET || 'http://127.0.0.1:8100',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-      },
-    },
   },
   build: {
     rollupOptions: {
@@ -34,6 +24,7 @@ export default defineConfig({
           charts: ['recharts'],
           motion: ['framer-motion'],
           forms: ['react-hook-form', '@hookform/resolvers', 'zod'],
+          supabase: ['@supabase/supabase-js'],
         },
       },
     },

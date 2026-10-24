@@ -1,5 +1,22 @@
 # Test results
 
+## Supabase migration status — 2026-10-24
+
+**Prepared, not connected to a live Supabase project.** No project URL/key has been supplied, the migrations have not been run in a Supabase project, the Edge Function has not been deployed, and the Vercel build has not been switched. Do not treat the old Sheets/Vercel results below as tests of this Supabase migration.
+
+| Check | Result |
+| --- | --- |
+| `npm run typecheck` | **clean** (0 errors). |
+| `npm test` | **39/39 passed** (the obsolete Sheets integration tests were retained as commented `.txt` references, not run as active tests). |
+| `npm run build` | **success** — largest app chunk 640.11 kB (183.51 kB gzip); Supabase SDK split into its own 211.49 kB chunk. |
+| Edge Function syntax | `manage-user/index.ts` parsed with esbuild; Supabase Dashboard/Deno deployment not yet available to verify. |
+| PGlite local migration exercise | The combined `supabase/setup.sql` and ordered migrations both executed; 15 public books seeded. Anon direct profile reads were denied while public catalogue access succeeded; a student was forbidden from `users.list` and received a self-scoped bootstrap. Admin bootstrap, book issue, settings update, analytics, reservation create/cancel and service-role profile update trigger were exercised. |
+| Supabase project / Edge Function / Vercel | **Not run** — waiting for the project URL, public publishable key, SQL setup, first admin and function deployment. |
+
+The historical Apps Script results below are archived context for the previous backend, not evidence that Supabase is live.
+
+---
+
 Last run: **2026-10-23**, in this workspace. Every number below is from an executed
 command, not an estimate. Anything not run is marked *not run*.
 

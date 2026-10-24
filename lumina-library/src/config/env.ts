@@ -1,26 +1,24 @@
 /**
- * Public, build-time configuration.
- * Only NON-SECRET values belong here — Vite inlines them into the bundle.
- * The API base URL is a public Apps Script Web App URL; it holds no key.
+ * Public, build-time Supabase configuration.
+ *
+ * These two values are intentionally public in a browser build. Database tables
+ * have no direct anon/authenticated policies: the public key cannot read them
+ * without the Supabase Auth JWT + the role checks inside lumina_api(). NEVER put
+ * a service-role/secret key in VITE_* variables or frontend source.
  */
-const rawBase = (import.meta.env.VITE_API_BASE_URL ?? '').trim()
+export const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? '').trim().replace(/\/+$/, '')
+export const SUPABASE_PUBLISHABLE_KEY = (
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
+).trim()
 
-/** Base URL of the Apps Script Web App, or '' when the app runs in offline demo mode. */
-export const API_BASE_URL = rawBase.replace(/\/+$/, '')
+/** The app is live only after both public Supabase settings are present. */
+export const IS_API_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY)
 
-/** True when a backend is configured — the app then requires real credentials. */
-export const IS_API_CONFIGURED = API_BASE_URL.length > 0
+/** Used by the Settings → Connection card; the key itself is deliberately hidden. */
+export const API_BASE_URL = SUPABASE_URL ? `${SUPABASE_URL}/rest/v1/rpc/lumina_api` : ''
 
-/** Request timeout for normal calls. */
+/** Request budget for non-password operations. */
 export const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 30000)
 
-/** Where the session token is kept: sessionStorage by default, localStorage when "remember me". */
-export const SESSION_STORAGE_KEY = 'lumina.session.token.v1'
-export const REMEMBER_STORAGE_KEY = 'lumina.session.remember.v1'
-
-/**
- * Optional demo credentials hint shown on the login screen.
- * Never the authentication mechanism: the backend decides who you are.
- * Leave empty in a real deployment.
- */
+/** Optional demo credentials hint shown on the login screen; never the auth mechanism. */
 export const SHOW_DEMO_HINTS = (import.meta.env.VITE_SHOW_DEMO_HINTS ?? 'false') === 'true'

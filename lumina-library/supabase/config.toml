@@ -1,0 +1,4 @@
+# Project-specific values are supplied after you create the project in Supabase.
+# The manager function requires the caller's Supabase Auth JWT. It is not public-anonymous.
+[functions.manage-user]
+verify_jwt = true

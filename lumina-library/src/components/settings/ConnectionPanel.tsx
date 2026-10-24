@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CheckCircle2, CloudOff, Loader2, PlugZap, RefreshCw, Server, TriangleAlert } from 'lucide-react'
-import { API_BASE_URL, IS_API_CONFIGURED } from '@/config/env'
+import { IS_API_CONFIGURED, SUPABASE_URL } from '@/config/env'
 import { probeBackend } from '@/services/apiClient'
 import { useAuth } from '@/providers/AuthProvider'
 import { useLibrary } from '@/providers/LibraryProvider'
@@ -15,9 +15,8 @@ type Probe = Awaited<ReturnType<typeof probeBackend>>
 /**
  * Connection & sync status.
  *
- * Everything here is honest about what the app actually does: writes go through
- * the Apps Script API to Google Sheets, the browser never holds sheets
- * credentials, and refresh is explicit or polled — never "real-time".
+ * Supabase Auth handles identities; PostgreSQL is the source of truth. The app
+ * calls a role-checked RPC, and tables have no direct browser read/write policies.
  */
 export function ConnectionPanel() {
   const { mode, role } = useAuth()
@@ -41,7 +40,7 @@ export function ConnectionPanel() {
 
   const handleRefresh = async () => {
     const result = await refresh()
-    if (result.ok) toast.success('Records refreshed', 'The latest rows were read from Google Sheets.')
+    if (result.ok) toast.success('Records refreshed', 'The latest records were read from Supabase PostgreSQL.')
     else toast.error('Refresh failed', result.error)
   }
 
@@ -54,8 +53,8 @@ export function ConnectionPanel() {
           <CardTitle>Connection &amp; sync</CardTitle>
           <p className="mt-0.5 text-[11.5px] text-fg-muted">
             {mode === 'live'
-              ? 'Data is read from and written to Google Sheets through an Apps Script API.'
-              : 'This build runs on local sample data — no backend is configured.'}
+              ? 'Supabase Auth verifies sign-in; PostgreSQL stores library records behind role-checked RPC and RLS.'
+              : 'This build runs on local sample data — Supabase is not configured.'}
           </p>
         </div>
         <Badge tone={mode === 'live' ? (healthy ? 'success' : 'warn') : 'outline'}>
@@ -70,7 +69,7 @@ export function ConnectionPanel() {
               <Server className="size-3" aria-hidden="true" /> API endpoint
             </dt>
             <dd className="mt-1 truncate font-mono text-[11px] text-fg-soft">
-              {IS_API_CONFIGURED ? API_BASE_URL : 'not configured (VITE_API_BASE_URL unset)'}
+              {IS_API_CONFIGURED ? SUPABASE_URL : 'not configured (Supabase URL / public key unset)'}
             </dd>
           </div>
           <div className="rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
@@ -106,17 +105,15 @@ export function ConnectionPanel() {
 
         {mode === 'live' && (
           <InlineAlert tone="info" title="How syncing works">
-            Records load when you sign in, refresh after every change you make, and poll every two minutes while this
-            tab is open. Edits made directly in the spreadsheet appear after the next refresh — there is no
-            real-time push.
+            Records load when you sign in, refresh after changes, and poll periodically while this tab is open.
+            Supabase Realtime is not enabled by this prototype; direct database edits appear after the next refresh.
           </InlineAlert>
         )}
 
         {mode === 'demo' && (
           <InlineAlert tone="info" title="Demo data only">
-            Nothing is sent anywhere. Set <code className="font-mono text-[11px]">VITE_API_BASE_URL</code> to your
-            deployed Apps Script <code className="font-mono text-[11px]">/exec</code> URL to connect a real library
-            spreadsheet.
+            Nothing is sent anywhere. Set <code className="font-mono text-[11px]">VITE_SUPABASE_URL</code> and
+            <code className="font-mono text-[11px]">VITE_SUPABASE_PUBLISHABLE_KEY</code> after creating your Supabase project.
           </InlineAlert>
         )}
 
@@ -146,8 +143,7 @@ export function ConnectionPanel() {
         {mode === 'live' && probe && !probe.ok && (
           <p className="flex items-start gap-1.5 text-[11px] text-warning-300">
             <TriangleAlert className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-            Confirm the deployment is set to “Execute as: me” and “Who has access: anyone”, then redeploy as a new
-            version.
+            Check the Supabase project URL/key, apply both SQL migrations, and deploy the manage-user Edge Function.
           </p>
         )}
       </CardContent>

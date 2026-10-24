@@ -43,7 +43,6 @@ import {
 } from '@/features/library/engine'
 import { addDaysISO, nowISO } from '@/lib/dateUtils'
 import { findDuplicateBook, findDuplicateMember } from '@/lib/validation'
-import { mergeSheetBooks } from '@/features/sheets/sync'
 import { createId, makeId } from '@/lib/utils'
 import { DEFAULT_PREFERENCES, DEFAULT_CONFIG, emptyLibraryData } from '@/data/seedData'
 import { IS_API_CONFIGURED } from '@/config/env'
@@ -118,7 +117,7 @@ interface LibraryContextValue {
   recovered: boolean
   actor: string
   setActor: (name: string) => void
-  /** 'live' = Google Sheets via the Apps Script API; 'demo' = local seeded demo data. */
+  /** 'live' = Supabase Auth + PostgreSQL; 'demo' = local seeded demo data. */
   mode: DataMode
   /** Live-mode status. Always false/idle in demo mode. */
   loading: boolean
@@ -156,8 +155,6 @@ interface LibraryContextValue {
   updatePreferences: (memberId: string, patch: Partial<Preferences>) => Promise<OperationResult<Preferences>>
   updateConfig: (config: LibraryConfig) => Promise<OperationResult<LibraryConfig>>
   resetDemoData: () => Promise<OperationResult<void>>
-  /** Applies rows read from Google Sheets. The sheet wins on every field it owns. */
-  applySheetBooks: (incoming: Book[]) => Promise<OperationResult<{ added: number; updated: number }>>
   refreshFromStorage: () => void
 }
 
@@ -213,7 +210,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   /**
    * Single write path for demo mode: persist first, then update React state, so
-   * a failed save never desyncs. In live mode the sheet is the source of truth,
+   * a failed save never desyncs. In live mode Supabase is the source of truth,
    * so nothing is written to localStorage as authority.
    */
   const commit = useCallback((next: LibraryData): OperationResult<LibraryData> => {
@@ -232,7 +229,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   /**
    * Pull the whole (role-scoped) dataset from the backend and adopt it.
    * This is the only path that changes `data` in live mode, so what the UI shows
-   * is always what the sheet contains.
+   * is always what the role-scoped database snapshot contains.
    */
   const applyBootstrap = useCallback((payload: ApiBootstrap, userId: string) => {
     const next = toLibraryData({
@@ -310,7 +307,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   /**
    * Every live-mode write goes through here: call the API, then re-read the
-   * backend so the UI matches the sheet. Failures are surfaced, never faked.
+   * backend so the UI matches the database. Failures are surfaced, never faked.
    */
   const liveWrite = useCallback(
     async <T,>(request: () => Promise<T>): Promise<OperationResult<T>> => {
@@ -421,8 +418,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         status: 'active',
         addedAt: nowISO(),
         coverSeed: Math.floor(Math.random() * 900) + 100,
-        syncSource: 'website',
-        syncUpdatedAt: nowISO(),
       }
       const next = withActivity(
         { ...current, books: [book, ...current.books] },
@@ -455,7 +450,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
           `Copy count cannot be lower than the ${activeCopies} copies currently on loan. Process returns first.`,
         )
 
-      const updated: Book = { ...existing, ...input, syncSource: 'website', syncUpdatedAt: nowISO() }
+      const updated: Book = { ...existing, ...input }
       const next = withActivity(
         { ...current, books: current.books.map((book) => (book.id === id ? updated : book)) },
         [makeActivity('book.updated', `Updated details for “${updated.title}”`, actor, { bookId: id })],
@@ -482,8 +477,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       const updated: Book = {
         ...book,
         status: archived ? 'archived' : 'active',
-        syncSource: 'website',
-        syncUpdatedAt: nowISO(),
       }
       const next = withActivity(
         { ...current, books: current.books.map((item) => (item.id === id ? updated : item)) },
@@ -977,28 +970,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     [actor, commit],
   )
 
-  const applySheetBooks = useCallback<LibraryContextValue['applySheetBooks']>(
-    async (incoming) => {
-      if (mode === 'live') {
-        return fail('Sheets sync runs through the Apps Script backend in this mode.')
-      }
-      const current = dataRef.current
-      const merged = mergeSheetBooks(current.books, incoming)
-      if (merged.added.length === 0 && merged.updated.length === 0) {
-        return ok({ added: 0, updated: 0 })
-      }
-      const parts: string[] = []
-      if (merged.added.length) parts.push(`${merged.added.length} added`)
-      if (merged.updated.length) parts.push(`${merged.updated.length} updated`)
-      const next = withActivity({ ...current, books: merged.books }, [
-        makeActivity('sheet.sync', `Synced from Google Sheets — ${parts.join(', ')}`, 'Google Sheets'),
-      ])
-      const result = commit(next)
-      return result.ok ? ok({ added: merged.added.length, updated: merged.updated.length }) : result
-    },
-    [commit],
-  )
-
   const resetDemoData = useCallback<LibraryContextValue['resetDemoData']>(async () => {
     try {
       const seeded = resetLibraryData()
@@ -1059,7 +1030,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       updatePreferences,
       updateConfig,
       resetDemoData,
-      applySheetBooks,
       refreshFromStorage,
       mode,
       loading,
@@ -1095,7 +1065,6 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       updatePreferences,
       updateConfig,
       resetDemoData,
-      applySheetBooks,
       refreshFromStorage,
       mode,
       loading,

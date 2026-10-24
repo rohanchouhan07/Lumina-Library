@@ -1178,7 +1178,7 @@ export const seedActivity: ActivityEntry[] = [
 
 /**
  * A neutral, empty dataset used while connected to the backend: nothing is
- * seeded and nothing is persisted as authority — the sheet supplies every row.
+ * seeded and nothing is persisted as authority — Supabase supplies every live row.
  */
 export function emptyLibraryData(): LibraryData {
   return {

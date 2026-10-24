@@ -56,7 +56,7 @@ export function SettingsPage() {
       <PageHeader
         eyebrow="Configuration"
         title="Settings"
-        description={mode === 'live' ? 'Interface preferences, circulation policy and the connection to your Google Sheet.' : 'Interface preferences, circulation policy and local demo data management.'}
+        description={mode === 'live' ? 'Interface preferences, circulation policy and the Supabase connection.' : 'Interface preferences, circulation policy and local demo data management.'}
         actions={
           mode === 'live' ? (
             <Badge tone="success">
@@ -127,7 +127,7 @@ export function SettingsPage() {
               <div>
                 <CardTitle>{mode === 'live' ? 'Library records' : 'Demo data'}</CardTitle>
                 <p className="mt-0.5 text-[11.5px] text-fg-muted">
-                  {mode === 'live' ? 'Read from your Google Sheet on each refresh' : 'Stored in this browser only'}
+                  {mode === 'live' ? 'Read from Supabase on each refresh' : 'Stored in this browser only'}
                 </p>
               </div>
               <Database className="size-4 text-fg-faint" aria-hidden="true" />
@@ -167,7 +167,7 @@ export function SettingsPage() {
               </div>
               <p className="text-[11px] text-fg-faint">
                 {mode === 'live'
-                  ? 'Exports read your current session data. Changes belong to the spreadsheet, so this build deliberately offers no reset.'
+                  ? 'Exports read your current session data. Changes are stored in Supabase; this build deliberately offers no destructive reset.'
                   : 'Resetting restores the seeded catalogue, members, loans and reservations. Your demo session stays signed in if the profile still exists.'}
               </p>
             </CardContent>
@@ -183,14 +183,14 @@ export function SettingsPage() {
             <CardContent className="space-y-3 text-[12px] leading-relaxed text-fg-muted">
               <p>
                 {mode === 'live'
-                  ? 'Lumina Library runs against a Google Sheet through an Apps Script API. Signed-in sessions, books, members and circulation records all live in the spreadsheet — the browser holds only an opaque session token.'
+                  ? 'Lumina Library uses Supabase Auth and PostgreSQL. Signed-in sessions are managed by Supabase Auth; role-scoped library records are stored in PostgreSQL and returned through the protected RPC.'
                   : 'Lumina Library is a front-end prototype. All data is fictional sample content created for demonstration and stored in your browser’s local storage.'}
               </p>
               <div className="space-y-2 rounded-lg border border-white/8 bg-ink-950/40 p-3">
                 <InfoRow label="Library name" value={data.config.libraryName} />
                 <InfoRow label="Dataset version" value={`v${data.version}`} />
                 <InfoRow label="Last seeded" value={formatDate(new Date().toISOString())} />
-                <InfoRow label="Storage key" value={mode === 'live' ? 'session token (opaque)' : 'lumina.library.data.v1'} mono />
+                <InfoRow label="Storage key" value={mode === 'live' ? 'Supabase session (sessionStorage; tab-scoped)' : 'lumina.library.data.v1'} mono />
               </div>
               <div className="flex items-start gap-2 rounded-lg border border-brand-500/20 bg-brand-500/[0.06] p-2.5">
                 <Info className="mt-0.5 size-3.5 shrink-0 text-brand-300" aria-hidden="true" />
@@ -409,7 +409,7 @@ function PolicyForm({ config }: { config: LibraryConfig }) {
 
           <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] text-fg-faint">
-              Changes are saved to the library sheet and apply immediately to every client.
+              Changes are saved to Supabase PostgreSQL and apply after the next refresh.
             </p>
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" type="button" onClick={() => reset(config)} disabled={!isDirty}>

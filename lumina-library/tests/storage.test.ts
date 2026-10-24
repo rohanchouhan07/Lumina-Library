@@ -124,33 +124,17 @@ describe('validation', () => {
   })
 })
 
-describe('Google Sheets provenance survives a reload', () => {
-  it('keeps syncSource, syncUpdatedAt and sheetRow through sanitisation', () => {
+describe('legacy spreadsheet metadata sanitisation', () => {
+  it('drops Google Sheets sync fields from stored book records', () => {
     const base = createSeedData()
-    const synced = {
+    const legacy = {
       ...base,
-      books: base.books.map((book, index) =>
-        index === 0
-          ? { ...book, syncSource: 'sheet' as const, syncUpdatedAt: '2026-10-23T10:00:00.000Z', sheetRow: 12 }
-          : index === 1
-            ? { ...book, syncSource: 'website' as const }
-            : book,
-      ),
+      books: [{ ...base.books[0], syncSource: 'sheet', syncUpdatedAt: '2026-10-23T10:00:00.000Z', sheetRow: 12 }],
     }
-    const cleaned = sanitizeLibraryData(JSON.parse(JSON.stringify(synced)))
-    expect(cleaned?.books[0].syncSource).toBe('sheet')
-    expect(cleaned?.books[0].syncUpdatedAt).toBe('2026-10-23T10:00:00.000Z')
-    expect(cleaned?.books[0].sheetRow).toBe(12)
-    expect(cleaned?.books[1].syncSource).toBe('website')
-    expect(cleaned?.books[2].syncSource).toBeUndefined()
-  })
-
-  it('drops a bogus source value instead of trusting it', () => {
-    const base = createSeedData()
-    const corrupted = { ...base, books: [{ ...base.books[0], syncSource: 'hacker', sheetRow: 'x' }] }
-    const cleaned = sanitizeLibraryData(corrupted)
-    expect(cleaned?.books[0].syncSource).toBeUndefined()
-    expect(cleaned?.books[0].sheetRow).toBeUndefined()
+    const cleaned = sanitizeLibraryData(JSON.parse(JSON.stringify(legacy)))
+    expect(cleaned?.books[0]).not.toHaveProperty('syncSource')
+    expect(cleaned?.books[0]).not.toHaveProperty('syncUpdatedAt')
+    expect(cleaned?.books[0]).not.toHaveProperty('sheetRow')
   })
 })
 

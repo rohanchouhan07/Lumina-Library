@@ -33,7 +33,6 @@ export type ActivityKind =
   | 'reservation.expired'
   | 'config.updated'
   | 'data.reset'
-  | 'sheet.sync'
 
 export interface Book {
   id: string
@@ -53,16 +52,7 @@ export interface Book {
   tags: string[]
   /** Optional real cover image supplied by the backend. */
   coverImageUrl?: string
-  /** Which side produced the last change while Google Sheets sync is on. */
-  syncSource?: BookSyncSource
-  /** ISO timestamp of the last synced change. */
-  syncUpdatedAt?: string
-  /** 1-based sheet row this record was read from, when known. */
-  sheetRow?: number
 }
-
-/** Where a book record last changed: the website UI or the Google Sheet. */
-export type BookSyncSource = 'website' | 'sheet'
 
 export interface Member {
   id: string

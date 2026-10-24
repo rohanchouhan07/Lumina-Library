@@ -12,7 +12,6 @@ import {
   UserCog,
   CheckCircle2,
 } from 'lucide-react'
-import { FileSpreadsheet } from 'lucide-react'
 import type { ActivityEntry, ActivityKind } from '@/types'
 import { relativeTime } from '@/lib/dateUtils'
 import { Avatar } from '@/components/ui/Avatar'
@@ -37,7 +36,6 @@ const KIND_META: Record<ActivityKind, { icon: typeof BookPlus; tone: string; lab
   'reservation.expired': { icon: CircleSlash, tone: 'text-danger-400 bg-danger-500/10', label: 'Hold expired' },
   'config.updated': { icon: Settings2, tone: 'text-brand-300 bg-brand-500/10', label: 'Policy' },
   'data.reset': { icon: Database, tone: 'text-warn-400 bg-warn-500/10', label: 'Reset' },
-  'sheet.sync': { icon: FileSpreadsheet, tone: 'text-positive-400 bg-positive-500/10', label: 'Sheet sync' },
 }
 
 export function ActivityFeed({

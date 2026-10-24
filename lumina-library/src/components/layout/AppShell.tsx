@@ -167,7 +167,7 @@ export function AppShell() {
                   aria-hidden="true"
                 />
                 <p className="text-[11px] font-semibold text-fg-soft">
-                  {dataError ? 'Sync problem' : syncing ? 'Syncing…' : 'Google Sheets connected'}
+                  {dataError ? 'Sync problem' : syncing ? 'Syncing…' : 'Supabase connected'}
                 </p>
               </>
             ) : (
@@ -407,7 +407,7 @@ export function AppShell() {
         <footer className="border-t border-white/6 px-4 py-3">
           <p className="text-center text-[11px] text-fg-faint sm:text-left">
             {mode === 'live'
-              ? 'Lumina Library · connected to Google Sheets via Apps Script · not a production identity provider'
+              ? 'Lumina Library · Supabase Auth + PostgreSQL · role-checked RPC'
               : 'Lumina Library · demo prototype · sample data only — not connected to a real institution'}
           </p>
         </footer>

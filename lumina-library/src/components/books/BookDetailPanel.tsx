@@ -95,7 +95,7 @@ export function BookDetailPanel({
           <span className="inline-flex items-center gap-1">
             <Heart className="size-3" aria-hidden="true" /> {availability.reserved} active reservations
           </span>
-          <span>{mode === 'live' ? 'Live sheet data' : 'Demo data'}</span>
+          <span>{mode === 'live' ? 'Live Supabase data' : 'Demo data'}</span>
         </div>
       </div>
 

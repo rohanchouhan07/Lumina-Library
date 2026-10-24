@@ -1,4 +1,4 @@
-/** Wire format of the Apps Script backend. Mirrors google-sheets/backend responses. */
+/** Shared API response contract retained from the prior backend; Supabase RPC now implements it. */
 
 export type ApiRole = 'ADMIN' | 'LIBRARIAN' | 'FACULTY' | 'STUDENT'
 export type ApiAccountStatus = 'ACTIVE' | 'INACTIVE'
@@ -190,8 +190,6 @@ export interface ApiBootstrap {
 export interface ApiHealth {
   service: string
   version: string
-  spreadsheetId?: string
-  tabs?: string[]
   counts?: Record<string, number>
   time: string
 }

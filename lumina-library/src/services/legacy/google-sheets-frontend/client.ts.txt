@@ -1,0 +1,222 @@
+// DISABLED LEGACY GOOGLE SHEETS INTEGRATION — retained as commented reference only.
+// The active app now uses Supabase Auth + PostgreSQL; these functions are not imported.
+// No code in this archive is compiled or executed.
+// import type { Book } from '@/types'
+// import { parseCsv } from './csv'
+// import { csvToBooks } from './mapping'
+//
+// /**
+//  * Network access for Google Sheets — deliberately key-free.
+//  *
+//  *  • Reading uses the public `gviz/tq?tqx=out:csv` endpoint, which returns
+//  *    `Access-Control-Allow-Origin: *`, so a browser can read a shared sheet
+//  *    with no OAuth token or API key.
+//  *  • Writing uses a Google Apps Script Web App deployed by the sheet owner
+//  *    ("Execute as: me / Who has access: anyone"). Writes are sent as
+//  *    `text/plain` so the request stays a CORS "simple request" with no
+//  *    preflight, and the response is treated as opaque — success is confirmed by
+//  *    re-reading the CSV afterwards, never assumed.
+//  */
+//
+// export const SHEET_ERROR_CODES = ['network', 'http', 'missing-config', 'timeout', 'blocked'] as const
+// export type SheetErrorCode = (typeof SHEET_ERROR_CODES)[number]
+//
+// export class SheetError extends Error {
+//   code: SheetErrorCode
+//
+//   constructor(code: SheetErrorCode, message: string) {
+//     super(message)
+//     this.name = 'SheetError'
+//     this.code = code
+//   }
+// }
+//
+// export interface SheetRef {
+//   id: string
+//   gid: string
+// }
+//
+// /** Accepts a full Google Sheets URL or a bare spreadsheet id. */
+// export function parseSheetUrl(input: string): SheetRef | null {
+//   const value = input.trim()
+//   if (!value) return null
+//   const urlMatch = value.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+//   const gidMatch = value.match(/[#&?]gid=(\d+)/)
+//   if (urlMatch) return { id: urlMatch[1], gid: gidMatch?.[1] ?? '0' }
+//   if (/^[a-zA-Z0-9-_]{20,}$/.test(value)) return { id: value, gid: gidMatch?.[1] ?? '0' }
+//   return null
+// }
+//
+// export function sheetCsvUrl(ref: SheetRef): string {
+//   return `https://docs.google.com/spreadsheets/d/${ref.id}/gviz/tq?tqx=out:csv&gid=${ref.gid}`
+// }
+//
+// export interface SheetReadConfig {
+//   sheetUrl: string
+//   /** Escape hatch for local testing or a self-hosted mirror; the UI never sets it. */
+//   csvUrlOverride?: string
+// }
+//
+// /**
+//  * A page with an opaque origin (sandboxed iframe, `file://`) cannot make
+//  * cross-origin requests at all, so don't even try — surface it as a friendly,
+//  * explicit state instead of a console error.
+//  */
+// export function isNetworkImpossible(): boolean {
+//   try {
+//     if (window.location.origin === 'null' || window.location.origin === '') return true
+//   } catch {
+//     return true
+//   }
+//   // An opaque-origin frame (sandbox="allow-scripts", file://) blocks Web Storage;
+//   // that same origin restriction makes cross-origin fetches fail too. A top-level
+//   // page with private-mode storage disabled is *not* treated as offline.
+//   try {
+//     if (window.self === window.top) return false
+//   } catch {
+//     return true
+//   }
+//   try {
+//     window.localStorage.getItem('lumina.net-probe')
+//     return false
+//   } catch {
+//     return true
+//   }
+// }
+//
+// const BLOCKED_MESSAGE =
+//   'Could not reach Google Sheets from this page. Network requests are blocked in the embedded preview — run the app locally (npm run dev) or on a deployed URL.'
+//
+// async function fetchText(url: string, timeoutMs: number): Promise<string> {
+//   if (isNetworkImpossible()) throw new SheetError('blocked', BLOCKED_MESSAGE)
+//   const controller = new AbortController()
+//   const timer = setTimeout(() => controller.abort(), timeoutMs)
+//   try {
+//     const response = await fetch(url, {
+//       method: 'GET',
+//       cache: 'no-store',
+//       redirect: 'follow',
+//       signal: controller.signal,
+//     })
+//     if (!response.ok) {
+//       throw new SheetError('http', `Google responded with ${response.status}. Is the sheet still shared?`)
+//     }
+//     return await response.text()
+//   } catch (error) {
+//     if (error instanceof SheetError) throw error
+//     if (error instanceof DOMException && error.name === 'AbortError') {
+//       throw new SheetError('timeout', 'Google Sheets did not answer in time. Check your connection and retry.')
+//     }
+//     throw new SheetError('blocked', BLOCKED_MESSAGE)
+//   } finally {
+//     clearTimeout(timer)
+//   }
+// }
+//
+// export interface SheetReadResult {
+//   books: Book[]
+//   skipped: number
+//   url: string
+//   raw: string
+// }
+//
+// /** Read every book row from the sheet. */
+// export async function readSheetBooks(config: SheetReadConfig, timeoutMs = 12000): Promise<SheetReadResult> {
+//   const ref = parseSheetUrl(config.sheetUrl)
+//   if (!ref && !config.csvUrlOverride) {
+//     throw new SheetError('missing-config', 'Add your Google Sheet link first.')
+//   }
+//   const url = config.csvUrlOverride?.trim() || sheetCsvUrl(ref as SheetRef)
+//   const raw = await fetchText(url, timeoutMs)
+//   if (/^\s*</.test(raw)) {
+//     throw new SheetError('http', 'That URL returned a web page, not a CSV. Make sure it is a Google Sheets link.')
+//   }
+//   const { books, skipped } = csvToBooks(parseCsv(raw))
+//   return { books, skipped, url, raw }
+// }
+//
+// export type ScriptAction = 'ping' | 'upsert' | 'derived' | 'archive'
+//
+// export interface ScriptPayload {
+//   action: ScriptAction
+//   rows?: Record<string, unknown>[]
+//   client?: string
+//   at: string
+//   token?: string
+// }
+//
+// export function makePayload(
+//   action: ScriptAction,
+//   rows?: Record<string, unknown>[],
+//   token?: string,
+// ): ScriptPayload {
+//   return {
+//     action,
+//     rows,
+//     client: 'lumina-library-web',
+//     at: new Date().toISOString(),
+//     ...(token ? { token } : {}),
+//   }
+// }
+//
+// /**
+//  * Send a write to the Apps Script Web App.
+//  *
+//  * `mode: 'no-cors'` keeps this a simple request: Apps Script does not always
+//  * return CORS headers, and a readable response is not required — the caller
+//  * re-reads the CSV to confirm the write landed.
+//  */
+// export async function sendToScript(scriptUrl: string, payload: ScriptPayload, timeoutMs = 15000): Promise<void> {
+//   if (!scriptUrl.trim()) {
+//     throw new SheetError('missing-config', 'Add your Apps Script Web App URL to write back to the sheet.')
+//   }
+//   if (isNetworkImpossible()) throw new SheetError('blocked', BLOCKED_MESSAGE)
+//   if (!isBridgeUrl(scriptUrl)) {
+//     throw new SheetError(
+//       'missing-config',
+//       'That does not look like an Apps Script Web App URL. It should start with https://script.google.com/macros/s/ and end with /exec.',
+//     )
+//   }
+//   const controller = new AbortController()
+//   const timer = setTimeout(() => controller.abort(), timeoutMs)
+//   try {
+//     await fetch(scriptUrl.trim(), {
+//       method: 'POST',
+//       mode: 'no-cors',
+//       cache: 'no-store',
+//       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+//       body: JSON.stringify(payload),
+//       signal: controller.signal,
+//     })
+//   } catch (error) {
+//     if (error instanceof DOMException && error.name === 'AbortError') {
+//       throw new SheetError('timeout', 'The Apps Script endpoint did not answer in time.')
+//     }
+//     throw new SheetError('blocked', BLOCKED_MESSAGE)
+//   } finally {
+//     clearTimeout(timer)
+//   }
+// }
+//
+// /**
+//  * A bridge endpoint is either a real Apps Script Web App or a local/hosted
+//  * compatible endpoint (used for testing and self-hosted proxies).
+//  */
+// export function isBridgeUrl(value: string): boolean {
+//   const url = value.trim()
+//   if (/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec/.test(url)) return true
+//   if (/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec\?/.test(url)) return true
+//   return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url)
+// }
+//
+// /** @deprecated kept for readability at call sites — same behaviour as isBridgeUrl. */
+// export function isAppsScriptUrl(value: string): boolean {
+//   return isBridgeUrl(value)
+// }
+//
+// /** Human-readable explanation for any sync failure. */
+// export function describeSheetError(error: unknown): string {
+//   if (error instanceof SheetError) return error.message
+//   if (error instanceof Error) return error.message
+//   return 'Google Sheets sync failed for an unknown reason.'
+// }

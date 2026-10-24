@@ -25,3 +25,7 @@ dist-pages/
 
 # browser/test noise
 .config/
+
+# exported archives for download
+*.bundle
+lumina-library-source.zip

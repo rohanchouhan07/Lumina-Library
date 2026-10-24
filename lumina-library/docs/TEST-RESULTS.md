@@ -127,6 +127,30 @@ console errors.
 
 Only a book row is created and removed — no member account, no loan.
 
+### Deployed site vs deployed backend — `node qa-tools/live-public-verify.mjs`
+
+**19/19** against `https://lumina-library-fawn.vercel.app` (bundle `index-Dw9nc9nh.js`,
+commit `1d7f2d1`) with the API on **2.2.1**:
+
+| Check | Result |
+| --- | --- |
+| backend answers `catalogue.public` | 15 titles · 64 copies · 64 available · 3 members |
+| landing page, signed out, live state | reached it |
+| landing counters | page `64 / 3 / 0 / 64` = API `copies 64, members 3, onLoan 0, available 64` |
+| hero strip | "64 copies available today" |
+| `/catalog` | 12 cards on screen, header "15 titles across 14 subject areas" = API total |
+| `/books/BK-1008` | "Artificial Intelligence: A Modern Approach" by Stuart Russell — the row the API returns for that id |
+| signed-out network | exactly one action fired, `catalogue.public`, no session token |
+| payload leak scan | 25 835 chars: no emails, `userName`, `userId`, loan, fine, credential or settings field |
+| anonymous access to session actions | `bootstrap`, `users.list`, `loans.list`, `reservations.list`, `settings.get`, `activity.list`, `system.diagnostics`, `users.me`, `books.list`, `reports.dashboard` → all `UNAUTHORIZED` |
+| console errors | none |
+
+The first run of this suite failed 7 checks; every one was a fault in the *suite*, not the site —
+a throttled ground-truth `fetch` (now retried with backoff), counters read before
+`AnimatedNumber` had run, and catalogue readiness keyed on button text instead of the cards'
+`data-book-id`. Recorded here because "the test was wrong" is worth distinguishing from
+"the product was wrong".
+
 ### Public pages while signed out — `node qa-tools/public-catalogue-check.mjs`
 
 The owner reported the deployed site showing **0 titles / 0 copies** on the landing page and an

@@ -12,6 +12,7 @@ import {
   ChevronDown,
   LibraryBig,
   ScanLine,
+  RotateCcw,
   Search,
   Sparkles,
   Users,
@@ -36,7 +37,7 @@ import type { Book } from '@/types'
 const HEADLINE = ['Your', 'Campus', 'Library,']
 
 export function LandingPage() {
-  const { data, stats, publicCatalogue } = useLibrary()
+  const { data, stats, publicCatalogue, retryPublicCatalogue } = useLibrary()
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const reduced = useReducedMotion()
@@ -62,7 +63,15 @@ export function LandingPage() {
   const signedOut = IS_API_CONFIGURED && !isAuthenticated
   const shownStats = signedOut && publicNumbers ? publicNumbers : null
   const publicUnavailable = signedOut && publicCatalogue.status === 'unavailable'
+  const publicFailed = publicCatalogue.status === 'unavailable' && publicCatalogue.reason === 'failed'
+  const publicUnsupported = publicCatalogue.status === 'unavailable' && publicCatalogue.reason === 'unsupported'
   const publicLoading = signedOut && (publicCatalogue.status === 'loading' || publicCatalogue.status === 'idle')
+  /** A dash, not a zero: "0" is a claim about the library, "—" is a claim about the request. */
+  const statText = (live: number | undefined, fallback: number) => {
+    if (shownStats) return formatNumber(live ?? 0)
+    if (signedOut) return '—'
+    return formatNumber(fallback)
+  }
 
   const heroBooks = useMemo(() => {
     const preferred = ['BK-002', 'BK-021', 'BK-030', 'BK-001', 'BK-024']
@@ -158,8 +167,8 @@ export function LandingPage() {
                   <span className="relative inline-flex size-2 rounded-full bg-brand-400" />
                 </span>
                 <span>
-                  <strong className="font-semibold text-fg">
-                    {shownStats ? formatNumber(shownStats.availableCopies) : formatNumber(stats.availableCopies)}
+                  <strong className="font-semibold text-fg" data-stat="available">
+                    {statText(shownStats?.availableCopies, stats.availableCopies)}
                   </strong>{' '}
                   copies available today
                 </span>
@@ -167,13 +176,22 @@ export function LandingPage() {
               <div className="hidden h-3 w-px bg-white/10 sm:block" />
               <div className="flex items-center gap-5 text-[12px] text-fg-muted">
                 <span>
-                  <strong className="font-semibold text-fg">{shownStats ? shownStats.totalTitles : stats.totalTitles}</strong> titles
+                  <strong className="font-semibold text-fg" data-stat="titles">
+                    {statText(shownStats?.totalTitles, stats.totalTitles)}
+                  </strong>{' '}
+                  titles
                 </span>
                 <span>
-                  <strong className="font-semibold text-fg">{shownStats ? shownStats.members : stats.students}</strong> members
+                  <strong className="font-semibold text-fg" data-stat="members">
+                    {statText(shownStats?.members, stats.students)}
+                  </strong>{' '}
+                  members
                 </span>
                 <span>
-                  <strong className="font-semibold text-fg">{shownStats ? shownStats.activeLoans : stats.activeLoans}</strong> on loan
+                  <strong className="font-semibold text-fg" data-stat="on-loan">
+                    {statText(shownStats?.activeLoans, stats.activeLoans)}
+                  </strong>{' '}
+                  on loan
                 </span>
               </div>
             </motion.div>
@@ -271,15 +289,30 @@ export function LandingPage() {
             <h2 className="text-[13px] font-medium tracking-[0.14em] text-fg-faint uppercase">
               Library at a glance
             </h2>
-            <p className="text-[11.5px] text-fg-faint">
-              {shownStats
-                ? 'Live figures from the library spreadsheet · counts, never member details'
-                : publicUnavailable
-                  ? 'Sign in to see live figures · this deployment predates the public catalogue'
-                  : publicLoading
-                    ? 'Reading the live catalogue… the first request after a quiet spell takes a few seconds'
-                    : 'Derived from the seeded demo dataset · sample figures, not institutional statistics'}
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-[11.5px] text-fg-faint" data-testid="stats-source">
+                {shownStats
+                  ? 'Live figures from the library spreadsheet · counts, never member details'
+                  : publicFailed
+                    ? 'Could not reach the library server · the figures below are not available right now'
+                    : publicUnsupported
+                      ? 'Sign in to see live figures · this deployment predates the public catalogue'
+                      : publicLoading
+                        ? 'Reading the live catalogue… the first request after a quiet spell takes a few seconds'
+                        : 'Derived from the seeded demo dataset · sample figures, not institutional statistics'}
+              </p>
+              {publicFailed && (
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  onClick={retryPublicCatalogue}
+                  leftIcon={<RotateCcw />}
+                  data-testid="stats-retry"
+                >
+                  Retry
+                </Button>
+              )}
+            </div>
           </Reveal>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-4">
             {[
@@ -292,10 +325,26 @@ export function LandingPage() {
                   ]
                 : publicUnavailable || publicLoading
                   ? [
-                      { label: 'Total book copies', value: 0, hint: publicLoading ? 'Loading…' : 'Sign in to load' },
-                      { label: 'Registered members', value: 0, hint: publicLoading ? 'Loading…' : 'Sign in to load' },
-                      { label: 'Books issued now', value: 0, hint: publicLoading ? 'Loading…' : 'Sign in to load' },
-                      { label: 'Available today', value: 0, hint: publicLoading ? 'Loading…' : 'Sign in to load' },
+                      {
+                        label: 'Total book copies',
+                        value: null,
+                        hint: publicLoading ? 'Loading…' : publicFailed ? 'Could not load' : 'Sign in to load',
+                      },
+                      {
+                        label: 'Registered members',
+                        value: null,
+                        hint: publicLoading ? 'Loading…' : publicFailed ? 'Could not load' : 'Sign in to load',
+                      },
+                      {
+                        label: 'Books issued now',
+                        value: null,
+                        hint: publicLoading ? 'Loading…' : publicFailed ? 'Could not load' : 'Sign in to load',
+                      },
+                      {
+                        label: 'Available today',
+                        value: null,
+                        hint: publicLoading ? 'Loading…' : publicFailed ? 'Could not load' : 'Sign in to load',
+                      },
                     ]
                   : [
                       { label: 'Total book copies', value: stats.totalCopies, hint: `${stats.totalTitles} unique titles` },
@@ -305,9 +354,13 @@ export function LandingPage() {
                     ]),
             ].map((item, index) => (
               <Reveal key={item.label} delay={index * 0.07}>
-                <div>
+                <div data-stat-tile={item.label}>
                   <dd className="font-display text-[clamp(1.9rem,4vw,2.75rem)] leading-none font-semibold tracking-tight text-fg">
-                    <AnimatedNumber value={item.value} />
+                    {item.value === null ? (
+                      <span className="text-fg-faint">—</span>
+                    ) : (
+                      <AnimatedNumber value={item.value} />
+                    )}
                   </dd>
                   <dt className="mt-1.5 text-[12.5px] font-medium text-fg-soft">{item.label}</dt>
                   <p className="mt-0.5 text-[11px] text-fg-faint">{item.hint}</p>
@@ -426,7 +479,15 @@ const FEATURES = [
 
 function FeaturesSection() {
   const [active, setActive] = useState(0)
+  const { data, publicCatalogue } = useLibrary()
   const feature = FEATURES[active]
+  /*
+   * The catalogue illustration used to hardcode "41 titles" — a number from the offline seed
+   * dataset that contradicted the live sheet. It now mirrors the books actually loaded, and
+   * says so, or falls back to a neutral label while the request is in flight.
+   */
+  const sampleBooks = data.books.filter((book) => book.status === 'active').slice(0, 3)
+  const catalogueCount = publicCatalogue.status === 'ready' ? publicCatalogue.stats.titles : null
 
   return (
     <section id="features" className="relative py-16 sm:py-24">
@@ -521,7 +582,7 @@ function FeaturesSection() {
                 className="relative mt-4"
               >
                 <div className="rounded-xl border border-white/8 bg-ink-950/50 p-4">
-                  <FeatureVisual variant={feature.key} />
+                  <FeatureVisual variant={feature.key} books={sampleBooks} catalogueCount={catalogueCount} />
                 </div>
                 <ul className="mt-4 grid gap-1.5 sm:grid-cols-3">
                   {feature.points.map((point) => (
@@ -540,31 +601,59 @@ function FeaturesSection() {
   )
 }
 
-function FeatureVisual({ variant }: { variant: string }) {
+function FeatureVisual({
+  variant,
+  books,
+  catalogueCount,
+}: {
+  variant: string
+  books: Book[]
+  catalogueCount: number | null
+}) {
   const reduced = useReducedMotion()
   const rows = [0, 1, 2]
   return (
-    <div className="space-y-2" aria-hidden="true">
+    <div className="space-y-2">
       {variant === 'catalog' && (
         <>
           <div className="flex items-center gap-2 rounded-lg border border-white/8 bg-ink-900/80 px-2.5 py-1.5">
             <Search className="size-3 text-fg-faint" />
-            <span className="text-[10.5px] text-fg-faint">algorithms</span>
-            <span className="ml-auto rounded bg-white/6 px-1.5 py-0.5 text-[9px] text-fg-muted">41 titles</span>
+            <span className="text-[10.5px] text-fg-faint">title, author, ISBN…</span>
+            <span
+              className="ml-auto rounded bg-white/6 px-1.5 py-0.5 text-[9px] text-fg-muted"
+              data-testid="feature-catalogue-count"
+            >
+              {catalogueCount !== null ? `${catalogueCount} titles` : 'catalogue'}
+            </span>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="space-y-1.5 rounded-lg border border-white/6 bg-ink-900/60 p-2">
-                <div className="aspect-2/3 rounded bg-gradient-to-br from-brand-500/25 to-violet-500/15" />
-                <div className="h-1.5 w-4/5 rounded bg-white/12" />
-                <div className="h-1.5 w-1/2 rounded bg-white/6" />
-              </div>
-            ))}
+            {rows.map((index) => {
+              const book = books[index]
+              return (
+                <div key={index} className="space-y-1.5 rounded-lg border border-white/6 bg-ink-900/60 p-2">
+                  {book ? (
+                    <>
+                      <div className="relative aspect-2/3 overflow-hidden rounded bg-gradient-to-br from-brand-500/25 to-violet-500/15">
+                        <BookCover book={book} />
+                      </div>
+                      <p className="line-clamp-2 text-[9px] leading-tight font-medium text-fg-soft">{book.title}</p>
+                      <p className="line-clamp-1 text-[8.5px] text-fg-faint">{book.author}</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="aspect-2/3 rounded bg-gradient-to-br from-brand-500/25 to-violet-500/15" />
+                      <div className="h-1.5 w-4/5 rounded bg-white/12" />
+                      <div className="h-1.5 w-1/2 rounded bg-white/6" />
+                    </>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </>
       )}
       {variant === 'circulation' && (
-        <div className="space-y-2">
+        <div className="space-y-2" aria-hidden="true">
           {rows.map((row) => (
             <div key={row} className="flex items-center gap-2 rounded-lg border border-white/6 bg-ink-900/70 px-2.5 py-2">
               <span className="grid size-6 place-items-center rounded bg-brand-500/12 text-brand-300">

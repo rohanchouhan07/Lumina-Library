@@ -107,7 +107,16 @@ export function AnimatedNumber({
   const ref = useRef<HTMLSpanElement>(null)
   const inView = useInView(ref, { once: true, margin: '-10% 0px' })
   const reduced = useReducedMotion()
-  const [display, setDisplay] = useState(startOnView ? 0 : value)
+  /*
+   * Render the real number immediately, and treat the count-up as a flourish that only runs
+   * on the first entry into the viewport.
+   *
+   * The previous version started at 0 and waited for an IntersectionObserver. If that observer
+   * never fired — an element inside a scroll container, a browser that throttles observers, a
+   * screenshot taken before the scroll — the figure stayed at 0 for ever, which reads as
+   * "the statistics are broken". A stat must never be wrong while it is idle.
+   */
+  const [display, setDisplay] = useState(value)
   const started = useRef(false)
 
   useEffect(() => {

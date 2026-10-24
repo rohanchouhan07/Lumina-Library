@@ -55,6 +55,7 @@ import * as loansService from '@/services/loansService'
 import * as reservationsService from '@/services/reservationsService'
 import * as settingsService from '@/services/settingsService'
 import * as wishlistService from '@/services/wishlistService'
+import { ApiError } from '@/types/api'
 import type { ApiBook, ApiBootstrap, ApiUser } from '@/types/api'
 
 export interface BookInput {
@@ -99,7 +100,12 @@ export type PublicCatalogueState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'ready'; stats: PublicCatalogueStats; fetchedAt: string }
-  | { status: 'unavailable'; message: string }
+  /**
+   * `unsupported` — the deployment predates `catalogue.public` (2.2.0 and older): signing in is
+   * the only way to see figures. `failed` — anything else (throttle, offline, bad envelope):
+   * the visitor gets a Retry button instead of a silent row of zeroes.
+   */
+  | { status: 'unavailable'; reason: 'unsupported' | 'failed'; message: string }
 
 interface LibraryContextValue {
   data: LibraryData
@@ -125,6 +131,8 @@ interface LibraryContextValue {
    * `null` until the call lands, `'unavailable'` when the deployment predates the action.
    */
   publicCatalogue: PublicCatalogueState
+  /** Re-request the signed-out catalogue (used by the landing page's Retry control). */
+  retryPublicCatalogue: () => void
   /** Live mode: adopt a bootstrap payload fetched during sign-in. */
   loadForSession: (payload: ApiBootstrap, user: ApiUser) => Promise<void>
   addBook: (input: BookInput) => Promise<OperationResult<Book>>
@@ -344,6 +352,9 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
    * If the deployment predates that action (2.2.0 and older answer UNKNOWN_ACTION) we say so
    * instead of pretending the library is empty — the pages then invite the visitor to sign in.
    */
+  const [publicAttempt, setPublicAttempt] = useState(0)
+  const retryPublicCatalogue = useCallback(() => setPublicAttempt((attempt) => attempt + 1), [])
+
   useEffect(() => {
     if (mode !== 'live' || activeUserId) return
     let cancelled = false
@@ -361,15 +372,20 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       })
       .catch((error: unknown) => {
         if (cancelled) return
+        // An old deployment answers UNKNOWN_ACTION; that is permanent until it is redeployed,
+        // so it gets different copy from a transient network or throttle failure.
+        const code = error instanceof ApiError ? error.code : ''
+        const unsupported = code === 'UNKNOWN_ACTION' || code === 'NOT_CONFIGURED'
         setPublicCatalogue({
           status: 'unavailable',
+          reason: unsupported ? 'unsupported' : 'failed',
           message: describeApiError(error),
         })
       })
     return () => {
       cancelled = true
     }
-  }, [mode, activeUserId])
+  }, [mode, activeUserId, publicAttempt])
 
   // Cross-tab consistency: adopt changes written by another tab.
   useEffect(() => {
@@ -1016,6 +1032,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       data,
       stats,
       publicCatalogue,
+      retryPublicCatalogue,
       storageOk,
       recovered,
       actor,

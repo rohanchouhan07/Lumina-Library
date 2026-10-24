@@ -32,3 +32,6 @@ lumina-library-source.zip
 
 # account export — contains credentials, never commit
 lumina-library-accounts.csv
+
+# user-uploaded screenshots
+uploads/

@@ -24,7 +24,7 @@ export function BookDetailPanel({
   actions?: ReactNode
   compact?: boolean
 }) {
-  const { data } = useLibrary()
+  const { data, mode } = useLibrary()
   const { can } = useAuth()
   const availability = getAvailability(book, data)
   const history = data.loans
@@ -95,7 +95,7 @@ export function BookDetailPanel({
           <span className="inline-flex items-center gap-1">
             <Heart className="size-3" aria-hidden="true" /> {availability.reserved} active reservations
           </span>
-          <span>Demo data</span>
+          <span>{mode === 'live' ? 'Live sheet data' : 'Demo data'}</span>
         </div>
       </div>
 

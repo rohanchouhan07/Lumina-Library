@@ -6,7 +6,7 @@
 var CONFIG = (function () {
   var props = PropertiesService.getScriptProperties();
   return {
-    VERSION: '2.2.0',
+    VERSION: '2.2.1',
     /** Data store. Falls back to the bound spreadsheet when the script is container-bound. */
     SPREADSHEET_ID: props.getProperty('SPREADSHEET_ID') || '18CGNA07OgL0TAH4mCVKz94AwQGx_Jc1jA2b_e-TfL3s',
     /** Optional domain restriction, e.g. 'college.edu'. Empty = any domain. */

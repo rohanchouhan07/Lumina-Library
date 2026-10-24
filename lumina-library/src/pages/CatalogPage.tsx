@@ -18,7 +18,16 @@ import type { Book } from '@/types'
 const PAGE_SIZE = 12
 
 export function CatalogPage() {
-  const { data, stats } = useLibrary()
+  const { data, stats, publicCatalogue } = useLibrary()
+  /*
+   * Signed out in live mode `stats` is empty until the public catalogue lands, so the header
+   * must not claim "0 titles" while the request is still in flight.
+   */
+  const publicLoading = publicCatalogue.status === 'loading' || publicCatalogue.status === 'idle'
+  const publicBlocked = publicCatalogue.status === 'unavailable'
+  const categoryCount =
+    new Set(data.books.filter((book) => book.status === 'active').map((book) => book.category)).size || 7
+  const counts = { totalTitles: stats.totalTitles, availableCopies: stats.availableCopies, categories: categoryCount }
   const { isAuthenticated } = useAuth()
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -61,8 +70,11 @@ export function CatalogPage() {
                 Browse the collection
               </h1>
               <p className="mt-2 max-w-xl text-[13.5px] leading-relaxed text-fg-muted">
-                {stats.totalTitles} titles across seven subject areas · {stats.availableCopies} copies available today.
-                Sign in to borrow or reserve a title.
+                {publicLoading
+                  ? 'Reading the live catalogue — the first request after a quiet spell can take a few seconds.'
+                  : publicBlocked
+                    ? 'Sign in with your library account to browse the live collection.'
+                    : `${counts.totalTitles} titles across ${counts.categories} subject areas · ${counts.availableCopies} copies available today. Sign in to borrow or reserve a title.`}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -164,16 +176,35 @@ export function CatalogPage() {
 
         <div className="mt-5">
           {results.length === 0 ? (
-            <EmptyState
-              icon={filters.query ? <Filter /> : <BookOpen />}
-              title={filters.query ? `No titles match “${filters.query}”` : 'No titles match these filters'}
-              description="Try removing a filter or searching for a different author, category or ISBN."
-              action={
-                <Button variant="secondary" size="sm" leftIcon={<RotateCcw />} onClick={reset}>
-                  Clear filters
-                </Button>
-              }
-            />
+            !isAuthenticated && IS_API_CONFIGURED && publicCatalogue.status === 'unavailable' ? (
+              <EmptyState
+                icon={<LibraryBig />}
+                title="Sign in to browse the live catalogue"
+                description="This deployment cannot read the catalogue without a session yet. Sign in with your library account and the full collection loads in a moment."
+                action={
+                  <Link to="/login">
+                    <Button size="sm">Sign in</Button>
+                  </Link>
+                }
+              />
+            ) : !isAuthenticated && IS_API_CONFIGURED && publicCatalogue.status === 'loading' ? (
+              <EmptyState
+                icon={<BookOpen />}
+                title="Loading the catalogue"
+                description="Fetching titles from the library spreadsheet — the first request after a quiet spell can take a few seconds."
+              />
+            ) : (
+              <EmptyState
+                icon={filters.query ? <Filter /> : <BookOpen />}
+                title={filters.query ? `No titles match “${filters.query}”` : 'No titles match these filters'}
+                description="Try removing a filter or searching for a different author, category or ISBN."
+                action={
+                  <Button variant="secondary" size="sm" leftIcon={<RotateCcw />} onClick={reset}>
+                    Clear filters
+                  </Button>
+                }
+              />
+            )
           ) : view === 'grid' ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {visible.map((book) => (

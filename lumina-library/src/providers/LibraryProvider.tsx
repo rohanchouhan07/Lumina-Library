@@ -55,7 +55,7 @@ import * as loansService from '@/services/loansService'
 import * as reservationsService from '@/services/reservationsService'
 import * as settingsService from '@/services/settingsService'
 import * as wishlistService from '@/services/wishlistService'
-import type { ApiBootstrap, ApiUser } from '@/types/api'
+import type { ApiBook, ApiBootstrap, ApiUser } from '@/types/api'
 
 export interface BookInput {
   title: string
@@ -87,6 +87,20 @@ export interface MemberInput {
 
 export type DataMode = 'live' | 'demo'
 
+export interface PublicCatalogueStats {
+  titles: number
+  copies: number
+  available: number
+  onLoan: number
+  members: number
+}
+
+export type PublicCatalogueState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; stats: PublicCatalogueStats; fetchedAt: string }
+  | { status: 'unavailable'; message: string }
+
 interface LibraryContextValue {
   data: LibraryData
   stats: LibraryStats
@@ -106,6 +120,11 @@ interface LibraryContextValue {
   clearDataError: () => void
   /** The signed-in member's id, used to scope wishlists in live mode. */
   setActiveUserId: (userId: string | null) => void
+  /**
+   * Live mode, signed out: the public catalogue read through `catalogue.public`.
+   * `null` until the call lands, `'unavailable'` when the deployment predates the action.
+   */
+  publicCatalogue: PublicCatalogueState
   /** Live mode: adopt a bootstrap payload fetched during sign-in. */
   loadForSession: (payload: ApiBootstrap, user: ApiUser) => Promise<void>
   addBook: (input: BookInput) => Promise<OperationResult<Book>>
@@ -172,6 +191,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
   const [dataError, setDataError] = useState<string | null>(null)
   const [activeUserId, setActiveUserId] = useState<string | null>(null)
+  const [publicCatalogue, setPublicCatalogue] = useState<PublicCatalogueState>({ status: 'idle' })
   const dataRef = useRef(data)
   dataRef.current = data
   const activeUserRef = useRef<string | null>(null)
@@ -316,6 +336,40 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     },
     [],
   )
+
+  /**
+   * Live mode, signed out: the public site still needs a catalogue.
+   *
+   * `catalogue.public` returns title-level rows plus four counters and nothing personal.
+   * If the deployment predates that action (2.2.0 and older answer UNKNOWN_ACTION) we say so
+   * instead of pretending the library is empty — the pages then invite the visitor to sign in.
+   */
+  useEffect(() => {
+    if (mode !== 'live' || activeUserId) return
+    let cancelled = false
+    setPublicCatalogue({ status: 'loading' })
+    callApi<{ books: ApiBook[]; stats: PublicCatalogueStats; serverTime: string }>('catalogue.public')
+      .then((payload) => {
+        if (cancelled) return
+        const books = (payload.books || []).map((book) => toBook(book))
+        setData((previous) => ({ ...previous, books }))
+        setPublicCatalogue({
+          status: 'ready',
+          stats: payload.stats,
+          fetchedAt: payload.serverTime || new Date().toISOString(),
+        })
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setPublicCatalogue({
+          status: 'unavailable',
+          message: describeApiError(error),
+        })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [mode, activeUserId])
 
   // Cross-tab consistency: adopt changes written by another tab.
   useEffect(() => {
@@ -961,6 +1015,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     () => ({
       data,
       stats,
+      publicCatalogue,
       storageOk,
       recovered,
       actor,
@@ -997,6 +1052,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     [
       data,
       stats,
+      publicCatalogue,
       storageOk,
       recovered,
       actor,

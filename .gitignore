@@ -29,3 +29,6 @@ dist-pages/
 # exported archives for download
 *.bundle
 lumina-library-source.zip
+
+# account export — contains credentials, never commit
+lumina-library-accounts.csv

@@ -83,6 +83,28 @@ check('health hides the spreadsheet id', !JSON.stringify(health.data).includes('
 check('GET ?action=ping responds', harness.get({ action: 'ping' }).data?.pong === true)
 check('GET rejects other actions', harness.get({ action: 'books.list' }).error?.code === 'UNKNOWN_ACTION')
 
+/* ------------------------------------------------------- public catalogue (no session) */
+
+const publicCatalogue = harness.post('catalogue.public', {})
+check(
+  'the public catalogue answers without a token',
+  publicCatalogue.ok && Array.isArray(publicCatalogue.data?.books) && publicCatalogue.data.books.length > 0,
+  publicCatalogue.ok ? `${publicCatalogue.data.books.length} titles` : publicCatalogue.error?.code,
+)
+const publicJson = JSON.stringify(publicCatalogue.data || {})
+check(
+  'the public catalogue leaks no member or circulation data',
+  !/password|hash|salt|token|@|userName|userId|loanId|email/i.test(publicJson),
+  publicJson.slice(0, 80),
+)
+check(
+  'the public catalogue carries aggregate counters',
+  ['titles', 'copies', 'available', 'onLoan', 'members'].every((key) => typeof publicCatalogue.data?.stats?.[key] === 'number'),
+  JSON.stringify(publicCatalogue.data?.stats),
+)
+const publicSearch = harness.post('catalogue.public', { search: 'zzz-no-such-title' })
+check('the public catalogue honours a search filter', publicSearch.ok && publicSearch.data.books.length === 0)
+
 /* --------------------------------------------------------------------- auth */
 
 const adminPassword = harness.props.get('SEED_ADMIN_PASSWORD')

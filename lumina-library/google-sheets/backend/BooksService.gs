@@ -52,6 +52,67 @@ function listBooks_(params) {
   return { books: books, total: books.length };
 }
 
+/**
+ * Public, unauthenticated catalogue read — the one action that answers without a session.
+ *
+ * It exists because the marketing site and /catalog are public pages: before this, a signed-out
+ * visitor saw an empty catalogue and four zeroes, which looked broken.
+ *
+ * What it deliberately does NOT return: member names, emails, IDs, loans, reservations, fines,
+ * activity, settings. Only title-level fields that are printed on a book's spine anyway, plus
+ * three aggregate counters. Archived titles are hidden.
+ */
+function publicCatalogue_(params) {
+  var payload = params || {};
+  var books = listBooks_({}).books.filter(function (book) {
+    return book.recordStatus === 'ACTIVE';
+  });
+
+  var search = payload.search ? sanitizeText_(payload.search, 80).toLowerCase() : '';
+  if (search) {
+    books = books.filter(function (book) {
+      var haystack = [book.title, book.author, book.category, book.isbn].join(' ').toLowerCase();
+      return haystack.indexOf(search) !== -1;
+    });
+  }
+
+  var category = payload.category ? sanitizeText_(payload.category, 80).toLowerCase() : '';
+  if (category && category !== 'all') {
+    books = books.filter(function (book) {
+      return String(book.category).toLowerCase() === category;
+    });
+  }
+
+  var all = listBooks_({}).books.filter(function (book) {
+    return book.recordStatus === 'ACTIVE';
+  });
+  var copies = 0;
+  var available = 0;
+  var onLoan = 0;
+  (all || []).forEach(function (book) {
+    copies += Number(book.totalCopies) || 0;
+    available += Number(book.availableCopies) || 0;
+    onLoan += Number(book.copiesOnLoan) || 0;
+  });
+
+  var users = readTable_('USERS', CONFIG.SHEETS.USERS).rows.filter(function (row) {
+    return String(row['Account status'] || '').toUpperCase() !== 'INACTIVE';
+  });
+
+  return {
+    books: books,
+    total: books.length,
+    stats: {
+      titles: all.length,
+      copies: copies,
+      available: available,
+      onLoan: onLoan,
+      members: users.length,
+    },
+    serverTime: new Date().toISOString(),
+  };
+}
+
 function getBook_(params) {
   var bookId = requireId_(params.bookId, 'Book ID');
   var store = readTable_('BOOKS', CONFIG.SHEETS.BOOKS);

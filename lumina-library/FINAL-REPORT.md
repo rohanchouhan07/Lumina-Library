@@ -114,10 +114,11 @@ results after that switch:
 | **Browser → spreadsheet write** (`live-ui-write-check`) | **11/11** — a book added through the UI appeared in the sheet's own CSV view, then was deleted |
 | Demo mode (`demo-e2e`, port 5176) | **10/10** |
 | Mock mode (`live-e2e` / `live-admin-flow`, port 5174) | **19/19** / **12/12** |
-| Backend logic (`gas-backend-test`) | **113/113** (adds 17 librarian + 7 password-rotation checks) |
+| Backend logic (`gas-backend-test`) | **113/113** (adds 17 librarian + 7 password-rotation checks), **117/117** with the public-catalogue checks |
 | Accounts & roles through the real screens (`roles-ui-check`, port 5174) | **19/19** — admin registers a librarian and a student, each signs in, guards hold, then a password is rotated and the old one stops working |
 | **Live librarian creation** (`live-librarian-check`, :5173) | **16/16** — a real `LIBRARIAN` row created through the Members form, signed in, desk screens present, policy read-only, no console errors |
 | **Live password rotation** (`live-password-rotation`) | **11/11** — `sessionsRevoked: 3`, caller's session alive, other session dead, old password refused, new one accepted, then rotated back |
+| Public pages signed out (`public-catalogue-check`) | **8/8** on the mock (real catalogue), **7/7** on 2.2.0 (honest fallback) |
 | Unit (`vitest`) + `tsc -b` + `npm run build` | **68/68** · clean · success |
 
 Three modes ship side by side and the header always states which is active: **live** (5173),

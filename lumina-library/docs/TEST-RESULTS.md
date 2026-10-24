@@ -127,6 +127,30 @@ console errors.
 
 Only a book row is created and removed — no member account, no loan.
 
+### Public pages while signed out — `node qa-tools/public-catalogue-check.mjs`
+
+The owner reported the deployed site showing **0 titles / 0 copies** on the landing page and an
+empty `/catalog`. Cause: the public pages read the same `bootstrap` payload as the app, which
+needs a session — so a signed-out visitor got `emptyLibraryData()`.
+
+Fix, in two parts:
+
+* **2.2.1 adds `catalogue.public`** — one unauthenticated read returning title-level rows plus
+  four counters (`titles`, `copies`, `available`, `onLoan`, `members`) and nothing personal;
+* **the frontend degrades honestly** against older deployments: landing says *"Sign in to see
+  live figures"*, `/catalog` shows a sign-in card, and a book deep link explains itself instead of
+  claiming the title does not exist.
+
+| Run | Result |
+| --- | --- |
+| `public-catalogue-check` against the mock (action present) | **8/8** — landing shows live counters, `/catalog` lists 8 titles, a `/books/:id` deep link resolves, no console errors |
+| `public-catalogue-check` against the live 2.2.0 deployment (action absent) | **7/7** — the signed-out fallback, no zeros, no console errors |
+| `gas-backend-test` (4 new public-catalogue checks) | **117/117** — answers without a token, leaks no member/circulation data, carries the counters, honours `search` |
+
+Two UI bugs were also fixed while testing: the landing page claimed "derived from the seeded demo
+dataset" while the public request was still in flight, and `/catalog` printed "0 titles across
+seven subject areas" before the data arrived. Both now render an explicit loading state.
+
 ### Live 2.2.0, deployed build — the runs that matter
 
 After the owner deployed 2.2.0 and rotated the admin password, these were run against the real

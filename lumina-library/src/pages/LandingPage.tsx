@@ -36,12 +36,33 @@ import type { Book } from '@/types'
 const HEADLINE = ['Your', 'Campus', 'Library,']
 
 export function LandingPage() {
-  const { data, stats } = useLibrary()
+  const { data, stats, publicCatalogue } = useLibrary()
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const reduced = useReducedMotion()
   const parallax = usePointerParallax(26)
   const [activeBook, setActiveBook] = useState<Book | null>(null)
+
+  /*
+   * Signed out in live mode there is no member-scoped data yet, so `stats` is all zeroes.
+   * Use the public catalogue's own counters instead, and when the deployment cannot answer
+   * `catalogue.public` (2.2.0 and older) say "sign in to see live figures" rather than
+   * printing four zeroes as if the library were empty.
+   */
+  const publicReady = publicCatalogue.status === 'ready'
+  const publicNumbers = publicReady
+    ? {
+        totalCopies: publicCatalogue.stats.copies,
+        totalTitles: publicCatalogue.stats.titles,
+        availableCopies: publicCatalogue.stats.available,
+        activeLoans: publicCatalogue.stats.onLoan,
+        members: publicCatalogue.stats.members,
+      }
+    : null
+  const signedOut = IS_API_CONFIGURED && !isAuthenticated
+  const shownStats = signedOut && publicNumbers ? publicNumbers : null
+  const publicUnavailable = signedOut && publicCatalogue.status === 'unavailable'
+  const publicLoading = signedOut && (publicCatalogue.status === 'loading' || publicCatalogue.status === 'idle')
 
   const heroBooks = useMemo(() => {
     const preferred = ['BK-002', 'BK-021', 'BK-030', 'BK-001', 'BK-024']
@@ -138,7 +159,7 @@ export function LandingPage() {
                 </span>
                 <span>
                   <strong className="font-semibold text-fg">
-                    {formatNumber(stats.availableCopies)}
+                    {shownStats ? formatNumber(shownStats.availableCopies) : formatNumber(stats.availableCopies)}
                   </strong>{' '}
                   copies available today
                 </span>
@@ -146,13 +167,13 @@ export function LandingPage() {
               <div className="hidden h-3 w-px bg-white/10 sm:block" />
               <div className="flex items-center gap-5 text-[12px] text-fg-muted">
                 <span>
-                  <strong className="font-semibold text-fg">{stats.totalTitles}</strong> titles
+                  <strong className="font-semibold text-fg">{shownStats ? shownStats.totalTitles : stats.totalTitles}</strong> titles
                 </span>
                 <span>
-                  <strong className="font-semibold text-fg">{stats.students}</strong> students
+                  <strong className="font-semibold text-fg">{shownStats ? shownStats.members : stats.students}</strong> members
                 </span>
                 <span>
-                  <strong className="font-semibold text-fg">{stats.activeLoans}</strong> on loan
+                  <strong className="font-semibold text-fg">{shownStats ? shownStats.activeLoans : stats.activeLoans}</strong> on loan
                 </span>
               </div>
             </motion.div>
@@ -251,15 +272,37 @@ export function LandingPage() {
               Library at a glance
             </h2>
             <p className="text-[11.5px] text-fg-faint">
-              Derived from the seeded demo dataset · sample figures, not institutional statistics
+              {shownStats
+                ? 'Live figures from the library spreadsheet · counts, never member details'
+                : publicUnavailable
+                  ? 'Sign in to see live figures · this deployment predates the public catalogue'
+                  : publicLoading
+                    ? 'Reading the live catalogue… the first request after a quiet spell takes a few seconds'
+                    : 'Derived from the seeded demo dataset · sample figures, not institutional statistics'}
             </p>
           </Reveal>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-4">
             {[
-              { label: 'Total book copies', value: stats.totalCopies, hint: `${stats.totalTitles} unique titles` },
-              { label: 'Registered members', value: stats.totalMembers, hint: `${stats.activeMembers} active` },
-              { label: 'Books issued now', value: stats.activeLoans, hint: `${stats.utilisation}% of copies` },
-              { label: 'Available today', value: stats.availableCopies, hint: 'Ready to borrow' },
+              ...(shownStats
+                ? [
+                    { label: 'Total book copies', value: shownStats.totalCopies, hint: `${shownStats.totalTitles} unique titles` },
+                    { label: 'Registered members', value: shownStats.members, hint: 'Accounts on the sheet' },
+                    { label: 'Books issued now', value: shownStats.activeLoans, hint: 'Copies currently out' },
+                    { label: 'Available today', value: shownStats.availableCopies, hint: 'Ready to borrow' },
+                  ]
+                : publicUnavailable || publicLoading
+                  ? [
+                      { label: 'Total book copies', value: 0, hint: publicLoading ? 'Loading…' : 'Sign in to load' },
+                      { label: 'Registered members', value: 0, hint: publicLoading ? 'Loading…' : 'Sign in to load' },
+                      { label: 'Books issued now', value: 0, hint: publicLoading ? 'Loading…' : 'Sign in to load' },
+                      { label: 'Available today', value: 0, hint: publicLoading ? 'Loading…' : 'Sign in to load' },
+                    ]
+                  : [
+                      { label: 'Total book copies', value: stats.totalCopies, hint: `${stats.totalTitles} unique titles` },
+                      { label: 'Registered members', value: stats.totalMembers, hint: `${stats.activeMembers} active` },
+                      { label: 'Books issued now', value: stats.activeLoans, hint: `${stats.utilisation}% of copies` },
+                      { label: 'Available today', value: stats.availableCopies, hint: 'Ready to borrow' },
+                    ]),
             ].map((item, index) => (
               <Reveal key={item.label} delay={index * 0.07}>
                 <div>
@@ -621,7 +664,10 @@ function FeatureVisual({ variant }: { variant: string }) {
 /* -------------------------------------------------------------------------- */
 
 function DiscoverySection({ books, onOpen }: { books: Book[]; onOpen: (book: Book) => void }) {
-  const { data } = useLibrary()
+  const { data, publicCatalogue } = useLibrary()
+  const { isAuthenticated } = useAuth()
+  const catalogueUnavailable =
+    IS_API_CONFIGURED && !isAuthenticated && publicCatalogue.status === 'unavailable'
   const [query, setQuery] = useState('')
   const results = useMemo(
     () => filterBooks(books, data, { query, category: 'all', availability: 'all', sort: 'relevance' }),
@@ -639,7 +685,11 @@ function DiscoverySection({ books, onOpen }: { books: Book[]; onOpen: (book: Boo
           <SectionHeading
             eyebrow="Explore books"
             title="A catalogue that feels worth browsing."
-            description="Search the seeded collection right here. Every cover is generated in-app, so nothing depends on an external image service."
+            description={
+              IS_API_CONFIGURED
+                ? 'Search the library\'s live catalogue right here — titles, authors and how many copies are free today. Every cover is generated in-app, so nothing depends on an external image service.'
+                : 'Search the seeded collection right here. Every cover is generated in-app, so nothing depends on an external image service.'
+            }
             actions={
               <Link to="/catalog">
                 <Button variant="secondary" rightIcon={<ArrowRight />}>
@@ -676,8 +726,21 @@ function DiscoverySection({ books, onOpen }: { books: Book[]; onOpen: (book: Boo
           <div className="mt-6">
             <EmptyState
               icon={<Search />}
-              title="No titles match that search"
-              description="Try a different author, category or ISBN, or clear the search to see everything."
+              title={catalogueUnavailable ? 'The live catalogue needs a sign-in' : 'No titles match that search'}
+              description={
+                catalogueUnavailable
+                  ? 'This deployment cannot read the catalogue without a session yet. Sign in with your library account to browse every title.'
+                  : 'Try a different author, category or ISBN, or clear the search to see everything.'
+              }
+              action={
+                catalogueUnavailable ? (
+                  <Link to="/login">
+                    <Button size="sm" variant="secondary">
+                      Sign in
+                    </Button>
+                  </Link>
+                ) : undefined
+              }
             />
           </div>
         ) : (

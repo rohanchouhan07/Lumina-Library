@@ -30,6 +30,33 @@ page.on('console', (message) => {
 page.on('pageerror', (error) => consoleErrors.push(String(error)))
 
 const bodyText = () => page.evaluate(() => document.body.innerText)
+
+/**
+ * Navigation with one retry. A dev server mid-reload can leave a single goto hanging until
+ * its 60 s ceiling; retrying once is cheaper than a flaky suite.
+ */
+const goto = async (path) => {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      // A dev server mid-reload can hold a single navigation open; fall back to a hard
+      // location change plus an explicit wait, which every call site already does.
+      await Promise.race([
+        page.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded', timeout: 15_000 }),
+        sleep(15_000),
+      ])
+      return
+    } catch (error) {
+      if (attempt === 2) {
+        await page.evaluate((target) => {
+          window.location.href = target
+        }, path).catch(() => {})
+        await sleep(1500)
+        return
+      }
+      await sleep(1200)
+    }
+  }
+}
 const waitFor = async (predicate, timeoutMs = 60_000) => {
   const started = Date.now()
   while (Date.now() - started < timeoutMs) {
@@ -89,7 +116,7 @@ const clickInDialog = (text) =>
   }, text)
 
 const signIn = async (identifier, password) => {
-  await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await goto('/login')
   await waitFor(() =>
     page.evaluate(() =>
       [...document.querySelectorAll('label')].some((label) =>
@@ -118,12 +145,12 @@ const signOut = async () => {
       window.sessionStorage.removeItem(key)
     }
   })
-  await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await goto('/login')
   await sleep(600)
 }
 
 const createMember = async ({ name, email, institutionalId, role, password }) => {
-  await page.goto(`${BASE}/app/members`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await goto('/app/members')
   const ready = await waitFor(async () => /members/i.test(await bodyText()))
   if (!ready) return { ok: false, why: 'members page never rendered' }
 
@@ -198,7 +225,7 @@ try {
       const nav = await bodyText()
       check('the librarian sees Members and Circulation', /members/i.test(nav) && /circulation/i.test(nav))
       check('the librarian sees the whole library, not just their own shelf', /dashboard|overview/i.test(nav))
-      await page.goto(`${BASE}/app/settings`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+      await goto('/app/settings')
       await waitFor(async () => /admins only|loan period/i.test(await bodyText()), 60_000)
       const settings = await bodyText()
       check(
@@ -207,11 +234,13 @@ try {
         settings.split('\n').find((line) => /admins only/i.test(line)) ?? '',
       )
     }
+    console.log('…step: signing out after librarian')
     await signOut()
+    console.log('…step: signed out')
     const studentIn = await signIn(`M-${RUN}`.toUpperCase().slice(0, 20), 'Reader@2026')
     check('the new student can sign in', studentIn, page.url())
     if (studentIn) {
-      await page.goto(`${BASE}/app/members`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+      await goto('/app/members')
       await waitFor(
         async () => /this area is restricted/i.test(await bodyText()) || /register member/i.test(await bodyText()),
         60_000,
@@ -227,7 +256,7 @@ try {
        * Password panel: reject a mismatch, then rotate for real and prove the new password
        * works and the old one does not.
        */
-      await page.goto(`${BASE}/app/profile`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+      await goto('/app/profile')
       const panelUp = await waitFor(async () => /change password/i.test(await bodyText()), 60_000)
       check('the profile page offers a change-password panel', panelUp)
 

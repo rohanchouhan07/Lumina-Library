@@ -9,6 +9,10 @@ do each job — pick the one that suits you.
 | Create a **librarian** | **Members ▸ Register member → Role: Librarian** | `users.create` via curl, or a row pasted into the `Users` tab |
 | Create a **student** | **Members ▸ Register member → Role: Student** | same |
 
+> **New in 2.2.1:** the public site can read the catalogue without a session
+> (`catalogue.public`), so the landing page and `/catalog` no longer show zeroes to signed-out
+> visitors.
+>
 > **New in 2.2.0:** the backend now has a real `LIBRARIAN` role. Before this, the live
 > backend only knew `ADMIN`, `FACULTY` and `STUDENT` — a librarian was silently stored as
 > faculty and could not issue or return books for anyone. Update your deployment (§0) before
@@ -16,13 +20,13 @@ do each job — pick the one that suits you.
 
 ---
 
-## 0. Update the deployment to 2.2.0 (once, 2 minutes)
+## 0. Update the deployment to 2.2.1 (once, 2 minutes)
 
 1. Apps Script editor → select everything in `Code.gs` → **Delete**.
 2. Paste the whole of `lumina-library/google-sheets/LUMINA-APPS-SCRIPT.gs`.
 3. **Ctrl+S**.
 4. **Deploy ▸ Manage deployments ▸ ✏️ ▸ Version: `New version` ▸ Deploy.**
-5. Check: open `<your /exec url>?action=health` — it must say `"version":"2.2.0"`.
+5. Check: open `<your /exec url>?action=health` — it must say `"version":"2.2.1"`.
 
 **The `/exec` URL does not change** when you deploy a new version of the same deployment —
 that is expected, and it is why the frontend's `VITE_API_BASE_URL` stays valid. (You would

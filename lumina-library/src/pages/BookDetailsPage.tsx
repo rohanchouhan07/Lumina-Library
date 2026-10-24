@@ -16,7 +16,7 @@ import { AvailabilityBadge } from '@/components/books/BookCard'
 
 export function BookDetailsPage() {
   const { id } = useParams<{ id: string }>()
-  const { data } = useLibrary()
+  const { data, publicCatalogue } = useLibrary()
   const { isAuthenticated, can } = useAuth()
   const navigate = useNavigate()
 
@@ -43,7 +43,13 @@ export function BookDetailsPage() {
         <EmptyState
           icon={<LibraryBig />}
           title="That title is not in the catalogue"
-          description={IS_API_CONFIGURED ? 'The book may have been archived or removed from the library.' : 'The book may have been archived or removed from this demo dataset.'}
+          description={
+            IS_API_CONFIGURED && publicCatalogue.status === 'unavailable'
+              ? 'The live catalogue could not be read without signing in. Sign in and open the title again.'
+              : IS_API_CONFIGURED
+                ? 'The book may have been archived or removed from the library.'
+                : 'The book may have been archived or removed from this demo dataset.'
+          }
           action={
             <Link to="/catalog">
               <Button leftIcon={<ArrowLeft />}>Back to catalogue</Button>

@@ -13,6 +13,8 @@ var ACTIONS = {
   /* public */
   health: { auth: false, handler: function () { return health_(); } },
   'auth.login': { auth: false, handler: function (payload) { return authLogin_(payload); } },
+  // Signed-out visitors of the public site need the catalogue; no member data crosses this line.
+  'catalogue.public': { auth: false, handler: function (payload) { return publicCatalogue_(payload); } },
 
   /* session */
   'auth.session': { auth: true, handler: function (auth) { return { user: publicUser_(auth.user) }; } },

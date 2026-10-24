@@ -1,4 +1,4 @@
-# Lumina Library — API reference (Apps Script backend v2.2.0)
+# Lumina Library — API reference (Apps Script backend v2.2.1)
 
 The browser never talks to Google Sheets directly. It posts a single JSON body to the
 Apps Script Web App URL, which validates the session, applies the mutation inside a
@@ -67,6 +67,7 @@ administrator account. See `docs/ROLE-MATRIX.md`.
 | Action | Auth | Payload | Data |
 | --- | --- | --- | --- |
 | `health` | — | `{}` | `{ service, version, tabs, counts, time }` |
+| `catalogue.public` | — | `{ search?, category? }` | `{ books, total, stats:{titles,copies,available,onLoan,members}, serverTime }` — the only signed-out read; title-level fields and four counters, no member data |
 | `auth.login` | — | `{ identifier, password, remember? }` | `{ token, user, expiresAt }` |
 | `auth.session` | S | `{}` | `{ user }` |
 | `auth.logout` | S | `{}` | `{ loggedOut: true }` |

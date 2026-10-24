@@ -6,6 +6,9 @@ A premium, animated **college library management system**: a cinematic public si
 operational dashboard for administrators, faculty and students — backed by a **Google Sheet through an
 Apps Script API**, with an offline demo mode when no backend is configured.
 
+- **Public catalogue** — signed-out visitors read titles and availability through one dedicated
+  action (`catalogue.public`) that returns no member data; if a deployment predates it, the pages
+  say "sign in to see live figures" instead of printing zeroes.
 - **Connected mode** — sign in with an email/institutional ID and password, everything reads from and
   writes to the spreadsheet, roles are issued by the server.
 - **Demo mode** — no backend configured: seeded sample data in `localStorage`, role cards instead of

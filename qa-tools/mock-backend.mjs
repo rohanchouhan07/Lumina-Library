@@ -473,6 +473,30 @@ const actions = {
 
   'books.list': () => ({ books: db.books.filter((b) => b.Title).map(mapBook), total: db.books.length }),
 
+  // Public catalogue: same contract as the Apps Script action, no session required.
+  'catalogue.public': (_auth, { payload }) => {
+    const all = db.books.filter((b) => b.Title && String(b.Status || 'ACTIVE').toUpperCase() !== 'ARCHIVED')
+    let books = all.map(mapBook)
+    const search = String(payload.search || '').toLowerCase()
+    if (search) {
+      books = books.filter((book) =>
+        [book.title, book.author, book.category, book.isbn].join(' ').toLowerCase().includes(search),
+      )
+    }
+    const category = String(payload.category || '').toLowerCase()
+    if (category && category !== 'all') books = books.filter((book) => book.category.toLowerCase() === category)
+    const copies = books.reduce((sum, book) => sum + book.totalCopies, 0)
+    const available = books.reduce((sum, book) => sum + book.availableCopies, 0)
+    const onLoan = books.reduce((sum, book) => sum + book.copiesOnLoan, 0)
+    const members = db.users.filter((user) => String(user['Account status'] || 'ACTIVE').toUpperCase() !== 'INACTIVE').length
+    return {
+      books,
+      total: books.length,
+      stats: { titles: all.length, copies, available, onLoan, members },
+      serverTime: nowISO(),
+    }
+  },
+
   'books.get': (auth, { payload }) => {
     const book = findById(db.books, 'Book ID', String(payload.bookId))
     if (!book) fail('NOT_FOUND', 'That book does not exist.')
@@ -1042,7 +1066,11 @@ const server = http.createServer((request, response) => {
       return
     }
     try {
-      const isPublic = body.action === 'health' || body.action === 'auth.login' || body.action === '__test.reset'
+      const isPublic =
+        body.action === 'health' ||
+        body.action === 'auth.login' ||
+        body.action === 'catalogue.public' ||
+        body.action === '__test.reset'
       const auth = isPublic ? { user: null, token: null } : session(body.token)
       const data = entry(auth, { payload: body.payload || {}, body })
       send({ ok: true, data })

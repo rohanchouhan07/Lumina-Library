@@ -90,7 +90,7 @@ export function BookCard({
   const availability = getAvailability(book, data)
 
   return (
-    <article className="group relative flex flex-col">
+    <article className="group relative flex flex-col" data-book-id={book.id}>
       <div
         className={cn(
           'relative overflow-hidden rounded-xl border border-white/8 bg-ink-900/60 transition-all duration-300 ease-[var(--ease-out-soft)]',

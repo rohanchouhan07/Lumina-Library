@@ -117,6 +117,25 @@ Deno.serve(async (req) => {
         return failure('VALIDATION_ERROR', 'Borrowing limit must be an integer from 0 to 50.')
       }
 
+      // Check the profile's unique keys before Auth inserts auth.users. The
+      // auth.users trigger creates the profile in the same transaction; without
+      // this preflight, a reused institutional ID becomes the opaque Auth error
+      // "Database error creating new user" rather than a useful conflict.
+      const [emailCheck, institutionalIdCheck] = await Promise.all([
+        admin.from('profiles').select('id').eq('email', email).maybeSingle(),
+        admin.from('profiles').select('id').eq('institutional_id', institutionalId).maybeSingle(),
+      ])
+      if (emailCheck.error || institutionalIdCheck.error) {
+        console.error('manage-user profile uniqueness check failed', {
+          emailCode: emailCheck.error?.code ?? null,
+          institutionalIdCode: institutionalIdCheck.error?.code ?? null,
+        })
+        return failure('SERVER_ERROR', 'Could not check for an existing email or institutional ID. Please retry.')
+      }
+      if (emailCheck.data || institutionalIdCheck.data) {
+        return failure('CONFLICT', 'An account with this email or institutional ID already exists. Use unique account details.')
+      }
+
       const { data: created, error: createError } = await admin.auth.admin.createUser({
         email,
         password,
@@ -124,7 +143,21 @@ Deno.serve(async (req) => {
         user_metadata: { full_name: name, institutional_id: institutionalId },
       })
       if (createError || !created.user) {
-        return failure(createError?.code === 'email_exists' ? 'CONFLICT' : 'VALIDATION_ERROR', createError?.message ?? 'The Auth account could not be created.')
+        const code = String(createError?.code ?? '')
+        const status = Number(createError?.status ?? 0)
+        if (['email_exists', 'user_already_exists'].includes(code)) {
+          return failure('CONFLICT', 'An Auth account already uses this email address.')
+        }
+        if (status >= 500 || code === 'unexpected_failure' || /database error creating new user/i.test(createError?.message ?? '')) {
+          // Do not log the email, password, metadata, or raw request. The SQLSTATE
+          // in Supabase Postgres Logs is needed to diagnose trigger/constraint errors.
+          console.error('manage-user Auth user creation failed', { code: code || 'unknown', status })
+          return failure(
+            'SERVER_ERROR',
+            'Supabase Auth could not save this account. Check Supabase Postgres Logs for the underlying trigger or constraint error.',
+          )
+        }
+        return failure('VALIDATION_ERROR', createError?.message ?? 'The Auth account could not be created.')
       }
 
       const profilePatch = {

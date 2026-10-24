@@ -32,6 +32,7 @@ import { SectionHeading } from '@/components/ui/Card'
 import { SearchInput } from '@/components/ui/Field'
 import { EmptyState } from '@/components/ui/Feedback'
 import { BookDetailDialog } from '@/components/books/BookDetailDialog'
+import { FeaturePreview } from '@/components/landing/FeaturePreviews'
 import type { Book } from '@/types'
 
 const HEADLINE = ['Your', 'Campus', 'Library,']
@@ -479,15 +480,17 @@ const FEATURES = [
 
 function FeaturesSection() {
   const [active, setActive] = useState(0)
-  const { data, publicCatalogue } = useLibrary()
+  const reduced = useReducedMotion()
+  const { publicCatalogue } = useLibrary()
   const feature = FEATURES[active]
   /*
-   * The catalogue illustration used to hardcode "41 titles" — a number from the offline seed
-   * dataset that contradicted the live sheet. It now mirrors the books actually loaded, and
-   * says so, or falls back to a neutral label while the request is in flight.
+   * The catalogue preview quotes the live titles and the API's own count when they are
+   * available; every other panel is built from sample records in FeaturePreviews.tsx, because
+   * a public page must not render real members, loans or fines.
    */
-  const sampleBooks = data.books.filter((book) => book.status === 'active').slice(0, 3)
   const catalogueCount = publicCatalogue.status === 'ready' ? publicCatalogue.stats.titles : null
+  // Title-level rows the public API already exposes — never member data.
+  const liveCatalogueRows = publicCatalogue.status === 'ready' ? publicCatalogue.books : []
 
   return (
     <section id="features" className="relative py-16 sm:py-24">
@@ -576,13 +579,27 @@ function FeaturesSection() {
 
               <motion.div
                 key={feature.key}
-                initial={{ opacity: 0, y: 8 }}
+                initial={reduced ? false : { opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                transition={reduced ? { duration: 0 } : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 className="relative mt-4"
               >
-                <div className="rounded-xl border border-white/8 bg-ink-950/50 p-4">
-                  <FeatureVisual variant={feature.key} books={sampleBooks} catalogueCount={catalogueCount} />
+                <div
+                  className="flex min-h-[300px] flex-col rounded-xl border border-white/8 bg-ink-950/50 p-3 sm:min-h-[340px] sm:p-4"
+                  data-testid={`feature-preview-${feature.key}`}
+                >
+                  <div className="flex flex-1 flex-col justify-center">
+                    <FeaturePreview
+                      variant={feature.key}
+                      liveBooks={liveCatalogueRows}
+                      catalogueCount={catalogueCount}
+                    />
+                  </div>
+                  <p className="mt-2.5 text-[10.5px] leading-relaxed text-fg-faint" data-testid="feature-preview-caption">
+                    {feature.key === 'catalog' && liveCatalogueRows.length > 0
+                      ? 'Titles and counts above come from the live catalogue; no member or loan records are shown.'
+                      : 'Illustrative preview built from sample records — not live library data.'}
+                  </p>
                 </div>
                 <ul className="mt-4 grid gap-1.5 sm:grid-cols-3">
                   {feature.points.map((point) => (
@@ -601,152 +618,6 @@ function FeaturesSection() {
   )
 }
 
-function FeatureVisual({
-  variant,
-  books,
-  catalogueCount,
-}: {
-  variant: string
-  books: Book[]
-  catalogueCount: number | null
-}) {
-  const reduced = useReducedMotion()
-  const rows = [0, 1, 2]
-  return (
-    <div className="space-y-2">
-      {variant === 'catalog' && (
-        <>
-          <div className="flex items-center gap-2 rounded-lg border border-white/8 bg-ink-900/80 px-2.5 py-1.5">
-            <Search className="size-3 text-fg-faint" />
-            <span className="text-[10.5px] text-fg-faint">title, author, ISBN…</span>
-            <span
-              className="ml-auto rounded bg-white/6 px-1.5 py-0.5 text-[9px] text-fg-muted"
-              data-testid="feature-catalogue-count"
-            >
-              {catalogueCount !== null ? `${catalogueCount} titles` : 'catalogue'}
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {rows.map((index) => {
-              const book = books[index]
-              return (
-                <div key={index} className="space-y-1.5 rounded-lg border border-white/6 bg-ink-900/60 p-2">
-                  {book ? (
-                    <>
-                      <div className="relative aspect-2/3 overflow-hidden rounded bg-gradient-to-br from-brand-500/25 to-violet-500/15">
-                        <BookCover book={book} />
-                      </div>
-                      <p className="line-clamp-2 text-[9px] leading-tight font-medium text-fg-soft">{book.title}</p>
-                      <p className="line-clamp-1 text-[8.5px] text-fg-faint">{book.author}</p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="aspect-2/3 rounded bg-gradient-to-br from-brand-500/25 to-violet-500/15" />
-                      <div className="h-1.5 w-4/5 rounded bg-white/12" />
-                      <div className="h-1.5 w-1/2 rounded bg-white/6" />
-                    </>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </>
-      )}
-      {variant === 'circulation' && (
-        <div className="space-y-2" aria-hidden="true">
-          {rows.map((row) => (
-            <div key={row} className="flex items-center gap-2 rounded-lg border border-white/6 bg-ink-900/70 px-2.5 py-2">
-              <span className="grid size-6 place-items-center rounded bg-brand-500/12 text-brand-300">
-                <ScanLine className="size-3" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="h-1.5 w-24 rounded bg-white/14" />
-                <div className="mt-1 h-1.5 w-16 rounded bg-white/6" />
-              </div>
-              <motion.span
-                className="rounded bg-positive-500/12 px-1.5 py-0.5 text-[9px] text-positive-400"
-                animate={reduced ? undefined : { opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 3, repeat: Infinity, delay: row * 0.4 }}
-              >
-                {row === 1 ? 'return' : 'issued'}
-              </motion.span>
-            </div>
-          ))}
-        </div>
-      )}
-      {variant === 'selfservice' && (
-        <div className="mx-auto max-w-[220px] rounded-xl border border-white/10 bg-ink-900/80 p-3">
-          <div className="mx-auto mb-2 h-1 w-10 rounded bg-white/10" />
-          <p className="text-[9px] tracking-[0.14em] text-fg-faint uppercase">My loans</p>
-          {[0, 1].map((i) => (
-            <div key={i} className="mt-1.5 rounded-lg border border-white/6 bg-ink-950/60 p-2">
-              <div className="h-1.5 w-3/4 rounded bg-white/14" />
-              <div className="mt-1 flex items-center justify-between">
-                <div className="h-1.5 w-12 rounded bg-white/6" />
-                <span className={cn('text-[8.5px]', i === 0 ? 'text-warn-400' : 'text-fg-muted')}>
-                  {i === 0 ? 'Due in 2d' : 'Due in 9d'}
-                </span>
-              </div>
-            </div>
-          ))}
-          <div className="mt-2 rounded-lg border border-brand-500/25 bg-brand-500/10 py-1 text-center text-[9px] text-brand-200">
-            Renew loan
-          </div>
-        </div>
-      )}
-      {variant === 'reservations' && (
-        <div className="space-y-1.5">
-          {['Ready for pickup', 'Queue position 2', 'Queue position 3'].map((label, i) => (
-            <div key={label} className="flex items-center gap-2 rounded-lg border border-white/6 bg-ink-900/70 px-2.5 py-1.5">
-              <span className={cn('size-1.5 rounded-full', i === 0 ? 'bg-positive-400' : 'bg-fg-faint')} />
-              <span className="text-[10px] text-fg-soft">{label}</span>
-              <span className="ml-auto text-[9px] text-fg-faint">
-                {i === 0 ? 'collect by Fri' : `#${i + 1}`}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-      {variant === 'analytics' && (
-        <div className="flex h-24 items-end gap-2 px-2">
-          {[38, 62, 45, 78, 56, 88, 70].map((height, index) => (
-            <motion.div
-              key={index}
-              className="flex-1 rounded-t bg-gradient-to-t from-brand-600/50 to-brand-400"
-              initial={reduced ? { height: `${height}%` } : { height: 0 }}
-              whileInView={{ height: `${height}%` }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
-            />
-          ))}
-        </div>
-      )}
-      {variant === 'members' && (
-        <div className="space-y-1.5">
-          {[
-            ['Riya Sharma', 'CSE · 3 on loan'],
-            ['Aditya Verma', 'IT · 1 on loan'],
-            ['Sneha Iyer', 'ECE · 0 on loan'],
-          ].map(([name, meta], i) => (
-            <div key={name} className="flex items-center gap-2 rounded-lg border border-white/6 bg-ink-900/70 px-2.5 py-1.5">
-              <span
-                className={cn(
-                  'grid size-5 place-items-center rounded-full text-[8px] font-bold text-white/90',
-                  i === 0 ? 'bg-brand-500/70' : i === 1 ? 'bg-violet-500/70' : 'bg-cyan-500/60',
-                )}
-              >
-                {name.split(' ').map((n) => n[0]).join('')}
-              </span>
-              <span className="text-[10px] text-fg-soft">{name}</span>
-              <span className="ml-auto text-[9px] text-fg-faint">{meta}</span>
-              <span className="size-1.5 rounded-full bg-positive-400" />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 /* -------------------------------------------------------------------------- */
 /* Discovery                                                                   */

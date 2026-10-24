@@ -99,7 +99,11 @@ export interface PublicCatalogueStats {
 export type PublicCatalogueState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'ready'; stats: PublicCatalogueStats; fetchedAt: string }
+  /**
+   * `books` keeps the raw catalogue rows so decorative previews can quote real availability
+   * (availableCopies vs totalCopies) without inventing loan records. Still title-level only.
+   */
+  | { status: 'ready'; stats: PublicCatalogueStats; books: ApiBook[]; fetchedAt: string }
   /**
    * `unsupported` — the deployment predates `catalogue.public` (2.2.0 and older): signing in is
    * the only way to see figures. `failed` — anything else (throttle, offline, bad envelope):
@@ -367,6 +371,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         setPublicCatalogue({
           status: 'ready',
           stats: payload.stats,
+          books: payload.books || [],
           fetchedAt: payload.serverTime || new Date().toISOString(),
         })
       })

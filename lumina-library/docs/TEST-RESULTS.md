@@ -331,6 +331,24 @@ included, no layout breaks.
 
 ---
 
+## 8b. Landing feature previews — `node qa-tools/feature-previews-check.mjs`
+
+The six-panel showcase on `/` used to fall back to grey skeleton bars for five of its six
+variants. Each panel now renders a finished mini-interface; five of them are built from the
+fictional `SAMPLE_*` arrays in `src/components/landing/FeaturePreviews.tsx` and say so, and
+only the catalogue panel quotes the public API (titles, shelves and copy counts — never a
+member, loan or fine).
+
+| Width | Tabs | Assertions |
+| --- | --- | --- |
+| 1440 × 1000 | 6 | panel renders, expected content present, no pulse skeletons, sample/live label, nothing clipped inside the panel, no horizontal page overflow |
+| 820 × 1180 | 6 | same |
+| 390 × 844 | 6 | same |
+| 1280 × 900, `prefers-reduced-motion: reduce` | 6 | panel fully rendered (no half-drawn bars), nothing clipped, no horizontal overflow |
+
+Result: **97/97** (6 tabs × 5 assertions × 3 widths + 6 reduced-motion assertions + console-error check),
+with zero console errors while switching features. Screenshots land in `/home/user/qa-screens/preview-*.png`.
+
 ## 9. Not run (and why)
 
 | Item | Status |

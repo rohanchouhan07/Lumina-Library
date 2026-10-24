@@ -140,16 +140,40 @@ try {
   )
   await sleep(900)
 
-  const tiles = await page.evaluate(() => {
-    const wanted = ['Total book copies', 'Registered members', 'Books issued now', 'Available today']
-    const out = {}
-    for (const label of wanted) {
-      const node = [...document.querySelectorAll('dt')].find((element) => element.innerText.trim() === label)
-      const value = node?.previousElementSibling?.innerText?.trim()
-      out[label] = value ?? null
+  /*
+   * Read the tiles only once two consecutive samples agree: the count-up animation runs on
+   * first entry into the viewport, and sampling mid-flight reports a partial number (58
+   * instead of 64) which looks like a data bug rather than a timing artefact.
+   */
+  const readTiles = () =>
+    page.evaluate(() => {
+      const wanted = ['Total book copies', 'Registered members', 'Books issued now', 'Available today']
+      const out = {}
+      for (const label of wanted) {
+        const node = [...document.querySelectorAll('dt')].find((element) => element.innerText.trim() === label)
+        out[label] = node?.previousElementSibling?.innerText?.trim() ?? null
+      }
+      return out
+    })
+  let tiles = await readTiles()
+  {
+    const started = Date.now()
+    let previous = null
+    while (Date.now() - started < 60_000) {
+      const current = await readTiles()
+      if (
+        previous &&
+        JSON.stringify(previous) === JSON.stringify(current) &&
+        Object.values(current).every((value) => value !== null)
+      ) {
+        tiles = current
+        break
+      }
+      previous = current
+      tiles = current
+      await sleep(700)
     }
-    return out
-  })
+  }
   const number = (value) => Number(String(value ?? '').replace(/[^\d]/g, ''))
   check(
     'the landing page shows non-zero live counts signed out',
@@ -177,9 +201,10 @@ try {
     if (/Reading the live catalogue/i.test(body)) return false
     const cards = await page.evaluate(() => document.querySelectorAll('[data-book-id]').length)
     return cards > 0 || /No titles match|Sign in to browse the live catalogue/i.test(body)
-  })
+  }, 90_000)
   check('the catalogue page reaches its live state', catalogReady)
-  await sleep(800)
+  await waitFor(async () => (await page.evaluate(() => document.querySelectorAll('[data-book-id]').length)) > 0, 20_000)
+  await sleep(600)
   const catalog = await text()
   await page.screenshot({ path: '/home/user/qa-screens/live-vercel-catalog.png', fullPage: false })
 

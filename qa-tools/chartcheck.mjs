@@ -1,0 +1,21 @@
+import puppeteer from 'puppeteer'
+const b = await puppeteer.launch({headless:true,args:['--no-sandbox']})
+const p = await b.newPage()
+p.on('console', m=>{ if(m.type()!=='log') console.log('CONSOLE',m.type(),m.text().slice(0,200)) })
+await p.setViewport({width:1440,height:900})
+await p.goto('http://localhost:5173/login',{waitUntil:'networkidle2'})
+await p.evaluate(()=>{const el=Array.from(document.querySelectorAll('button')).find(b=>b.innerText.includes('Enter Administrator demo'));el?.click()})
+await new Promise(r=>setTimeout(r,1200))
+await p.goto('http://localhost:5173/app/reports',{waitUntil:'networkidle2'})
+await new Promise(r=>setTimeout(r,1500))
+const info = await p.evaluate(()=>{
+  const svg = document.querySelector('.recharts-surface')
+  const rect = svg?.getBoundingClientRect()
+  const paths = Array.from(document.querySelectorAll('.recharts-area-area, .recharts-line-curve')).map(el=>({tag:el.tagName, d:(el.getAttribute('d')||'').slice(0,60)}))
+  const ticks = Array.from(document.querySelectorAll('.recharts-xAxis .recharts-cartesian-axis-tick-value')).map(t=>t.textContent)
+  return {rect: rect && {w:rect.width,h:rect.height}, paths, ticks}
+})
+console.log(JSON.stringify(info,null,1).slice(0,2000))
+await new Promise(r=>setTimeout(r,3000))
+await p.screenshot({path:'/home/user/qa-screens/chart-after-4s.png'})
+await b.close()

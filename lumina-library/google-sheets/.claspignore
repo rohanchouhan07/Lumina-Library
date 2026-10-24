@@ -1,0 +1,5 @@
+# Only the Apps Script sources are pushed.
+**/**
+!backend/*.gs
+!backend/appsscript.json
+!appsscript.json

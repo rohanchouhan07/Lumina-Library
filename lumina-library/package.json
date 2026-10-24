@@ -1,0 +1,45 @@
+{
+  "name": "lumina-library",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --noEmit",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev:mock": "VITE_API_BASE_URL=/api vite --port 5174",
+    "backend:bundle": "node google-sheets/build-bundle.mjs",
+    "test:api": "node ../qa-tools/api-smoke.mjs",
+    "test:backend": "node ../qa-tools/gas-backend-test.mjs",
+    "dev:demo": "VITE_API_BASE_URL= vite --port 5176"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "3.10.0",
+    "clsx": "2.1.1",
+    "date-fns": "3.6.0",
+    "framer-motion": "12.43.0",
+    "lucide-react": "0.577.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-hook-form": "7.90.0",
+    "react-router-dom": "7.18.4",
+    "recharts": "2.15.4",
+    "tailwind-merge": "3.7.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.1.18",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "happy-dom": "^21.0.4",
+    "tailwindcss": "4.1.18",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "^5.0.5"
+  }
+}

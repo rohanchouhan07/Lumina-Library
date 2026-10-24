@@ -1,0 +1,70 @@
+/**
+ * Minimal, dependency-free CSV reader/writer.
+ *
+ * Google Sheets exports are RFC-4180-ish: double quotes wrap cells, embedded quotes
+ * are doubled, and rows end with CRLF (or LF when typed by hand). A BOM is often
+ * prepended by `export?format=csv`. All four cases are handled here.
+ */
+
+/** Parse CSV text into a matrix of cell strings. Blank trailing lines are dropped. */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  const input = text.replace(/^\uFEFF/, '')
+  let row: string[] = []
+  let cell = ''
+  let inQuotes = false
+
+  const pushCell = () => {
+    row.push(cell)
+    cell = ''
+  }
+  const pushRow = () => {
+    pushCell()
+    const blank = row.length === 1 && row[0].trim() === ''
+    if (!blank) rows.push(row)
+    row = []
+  }
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i]
+    if (inQuotes) {
+      if (char === '"') {
+        if (input[i + 1] === '"') {
+          cell += '"'
+          i += 1
+        } else {
+          inQuotes = false
+        }
+      } else {
+        cell += char
+      }
+      continue
+    }
+    if (char === '"') {
+      inQuotes = true
+    } else if (char === ',') {
+      pushCell()
+    } else if (char === '\n') {
+      pushRow()
+    } else if (char === '\r') {
+      // swallow; \r\n is handled by the following \n
+      if (input[i + 1] !== '\n') pushRow()
+    } else {
+      cell += char
+    }
+  }
+  if (cell.length > 0 || row.length > 0) pushRow()
+  return rows
+}
+
+/** Escape a single CSV cell. */
+export function escapeCell(value: unknown): string {
+  const text = value === null || value === undefined ? '' : String(value)
+  if (/[",\r\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`
+  return text
+}
+
+/** Serialise a matrix back to CSV (CRLF line endings, as Google Sheets expects). */
+export function toCsv(rows: unknown[][]): string {
+  return rows.map((row) => row.map(escapeCell).join(',')).join('\r\n')
+}

@@ -1,0 +1,18 @@
+import puppeteer from 'puppeteer'
+const BASE='http://localhost:5173'
+const b = await puppeteer.launch({headless:true,args:['--no-sandbox']})
+const p = await b.newPage()
+await p.setViewport({width:1440,height:900})
+await p.goto(`${BASE}/login`,{waitUntil:'networkidle2'})
+await p.evaluate(()=>{const el=Array.from(document.querySelectorAll('button')).find(b=>b.innerText.includes('Enter Administrator demo'));el?.click()})
+await new Promise(r=>setTimeout(r,1200))
+console.log('path after login', await p.evaluate(()=>location.pathname))
+await p.evaluate(()=>{const el=Array.from(document.querySelectorAll('button')).find(b=>b.getAttribute('aria-haspopup')==='menu');el?.click()})
+await new Promise(r=>setTimeout(r,400))
+console.log('menu items', await p.evaluate(()=>Array.from(document.querySelectorAll('[role=menuitem]')).map(n=>n.innerText)))
+await p.evaluate(()=>{const el=Array.from(document.querySelectorAll('[role=menuitem]')).find(b=>b.innerText.includes('Sign out'));el?.click()})
+await new Promise(r=>setTimeout(r,1500))
+console.log('path after signout', await p.evaluate(()=>location.pathname))
+console.log('session', await p.evaluate(()=>localStorage.getItem('lumina.library.session.v1')))
+console.log('body head', (await p.evaluate(()=>document.body.innerText)).slice(0,200))
+await b.close()

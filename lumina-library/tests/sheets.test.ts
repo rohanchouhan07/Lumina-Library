@@ -1,0 +1,344 @@
+import { describe, expect, it } from 'vitest'
+import type { Book, LibraryData } from '@/types'
+import { escapeCell, parseCsv, toCsv } from '@/features/sheets/csv'
+import {
+  bookToSheetRecord,
+  buildColumnIndex,
+  csvToBooks,
+  derivedBookId,
+  formatDateTime,
+  parseSyncSource,
+  rowToBook,
+} from '@/features/sheets/mapping'
+import {
+  bookFingerprint,
+  derivedRows,
+  mergeSheetBooks,
+  pendingPushes,
+  snapshotBooks,
+} from '@/features/sheets/sync'
+import { isAppsScriptUrl, makePayload, parseSheetUrl, sheetCsvUrl } from '@/features/sheets/client'
+import { createSeedData } from '@/data/seedData'
+import { isoDaysFromNow } from '@/lib/dateUtils'
+
+/* ---------------------------------- helpers -------------------------------- */
+
+function makeBook(overrides: Partial<Book> = {}): Book {
+  return {
+    id: 'BK-T01',
+    isbn: '978-0000000001',
+    title: 'Test Book',
+    author: 'Test Author',
+    publisher: 'Test Press',
+    year: 2020,
+    category: 'Computer Science',
+    description: '',
+    shelf: 'T-01',
+    totalCopies: 2,
+    status: 'active',
+    addedAt: '2024-01-01T00:00:00.000Z',
+    coverSeed: 1,
+    tags: [],
+    ...overrides,
+  }
+}
+
+const USER_HEADER =
+  'Book ID,Title,Author,ISBN,Publisher,Year,Category,Shelf,Total copies,Copies on loan,Available copies,Status,Added'
+
+/* ------------------------------------- CSV --------------------------------- */
+
+describe('CSV parsing', () => {
+  it('parses the exact header row from the shared Google Sheet', () => {
+    const rows = parseCsv(`${USER_HEADER}\r\n`)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveLength(13)
+    expect(rows[0][0]).toBe('Book ID')
+    expect(rows[0][8]).toBe('Total copies')
+    expect(rows[0][12]).toBe('Added')
+  })
+
+  it('handles quotes, escaped quotes, embedded commas and newlines', () => {
+    const csv = 'Title,Author\r\n"Clean Code, A Handbook","Robert ""Uncle Bob"" Martin"\r\n"Multi\nline",X\r\n'
+    const rows = parseCsv(csv)
+    expect(rows).toHaveLength(3)
+    expect(rows[1][0]).toBe('Clean Code, A Handbook')
+    expect(rows[1][1]).toBe('Robert "Uncle Bob" Martin')
+    expect(rows[2][0]).toBe('Multi\nline')
+  })
+
+  it('strips a UTF-8 BOM and ignores blank trailing rows', () => {
+    const rows = parseCsv('\uFEFFA,B\n1,2\n\n')
+    expect(rows).toEqual([
+      ['A', 'B'],
+      ['1', '2'],
+    ])
+  })
+
+  it('round-trips values that need escaping', () => {
+    const csv = toCsv([
+      ['Title', 'Author'],
+      ['A "quoted" title', 'Comma, name'],
+    ])
+    const rows = parseCsv(csv)
+    expect(rows[1][0]).toBe('A "quoted" title')
+    expect(rows[1][1]).toBe('Comma, name')
+    expect(escapeCell('plain')).toBe('plain')
+  })
+})
+
+/* ---------------------------------- mapping -------------------------------- */
+
+describe('column mapping', () => {
+  it('matches tolerant header spellings', () => {
+    const index = buildColumnIndex(['book_id', 'TITLE', 'Author Name', 'Total Copies', 'Shelf Location'])
+    expect(index['Book ID']).toBe(0)
+    expect(index.Title).toBe(1)
+    expect(index.Author).toBe(2)
+    expect(index['Total copies']).toBe(3)
+    expect(index.Shelf).toBe(4)
+  })
+
+  it('turns a sheet row into a book, normalising numbers and status', () => {
+    const rows = parseCsv(
+      `${USER_HEADER}\r\nBK-900,  Deep Work ,Cal Newport,978-1,Portfolio,2016,Self Help,A-12,4,,,Active,2024-02-03\r\n`,
+    )
+    const { books, skipped } = csvToBooks(rows)
+    expect(skipped).toBe(0)
+    expect(books).toHaveLength(1)
+    const book = books[0]
+    expect(book.id).toBe('BK-900')
+    expect(book.title).toBe('Deep Work')
+    expect(book.year).toBe(2016)
+    expect(book.totalCopies).toBe(4)
+    expect(book.status).toBe('active')
+    expect(book.syncSource).toBe('sheet')
+    expect(book.addedAt.startsWith('2024-02-03')).toBe(true)
+  })
+
+  it('reads archived/removed statuses and marks the row as archived', () => {
+    const index = buildColumnIndex(parseCsv(USER_HEADER)[0])
+    const row = parseCsv(`BK-901,Old Title,A,ISBN,P,1999,General,S-1,1,,,"Removed",\r\n`)[0]
+    const book = rowToBook(row, index, 2)
+    expect(book?.status).toBe('archived')
+  })
+
+  it('skips blank rows and rows without a title rather than inventing books', () => {
+    const rows = parseCsv(`${USER_HEADER}\r\n,,,,,,,,,,,,\r\nBK-1,,Nobody,,,,,,2,,,Active,\r\n`)
+    const { books, skipped } = csvToBooks(rows)
+    expect(books).toHaveLength(0)
+    expect(skipped).toBe(1)
+  })
+
+  it('derives a stable id when the sheet has no Book ID column', () => {
+    const rows = parseCsv('Title,Author,Total copies\r\nDune,Frank Herbert,3\r\n')
+    const first = csvToBooks(rows).books[0]
+    const second = csvToBooks(rows).books[0]
+    expect(first.id).toBe(second.id)
+    expect(first.id).toBe(derivedBookId('Dune', 'Frank Herbert', ''))
+    expect(first.id.startsWith('BK-S')).toBe(true)
+  })
+
+  it('understands the source tag column', () => {
+    expect(parseSyncSource('Website')).toBe('website')
+    expect(parseSyncSource('web')).toBe('website')
+    expect(parseSyncSource('Sheet')).toBe('sheet')
+    expect(parseSyncSource('')).toBeUndefined()
+  })
+
+  it('tags every outgoing website record as a Website edit', () => {
+    const record = bookToSheetRecord(makeBook({ title: 'Tagged' }))
+    expect(record['Last edited from']).toBe('Website')
+    expect(record.Title).toBe('Tagged')
+    expect(record.Status).toBe('Active')
+  })
+})
+
+/* ----------------------------------- merge --------------------------------- */
+
+describe('sheet merge (sheet wins)', () => {
+  it('overwrites the fields the sheet owns and keeps local-only metadata', () => {
+    const local = makeBook({ title: 'Old title', totalCopies: 1, tags: ['local'], coverSeed: 42 })
+    const incoming = makeBook({ title: 'New title', totalCopies: 5, tags: ['google-sheet'], coverSeed: 999 })
+    const result = mergeSheetBooks([local], [incoming], '2025-01-01T00:00:00.000Z')
+    expect(result.updated).toHaveLength(1)
+    expect(result.books[0].title).toBe('New title')
+    expect(result.books[0].totalCopies).toBe(5)
+    expect(result.books[0].tags).toEqual(['local'])
+    expect(result.books[0].coverSeed).toBe(42)
+    expect(result.books[0].syncSource).toBe('sheet')
+    expect(result.books[0].syncUpdatedAt).toBe('2025-01-01T00:00:00.000Z')
+  })
+
+  it('adds new sheet rows and never drops website-only books', () => {
+    const local = makeBook({ id: 'BK-LOCAL', title: 'Website only' })
+    const incoming = makeBook({ id: 'BK-SHEET', title: 'From the sheet' })
+    const result = mergeSheetBooks([local], [incoming], '2025-01-01T00:00:00.000Z')
+    expect(result.added.map((book) => book.id)).toEqual(['BK-SHEET'])
+    expect(result.keptLocalOnly.map((book) => book.id)).toEqual(['BK-LOCAL'])
+    expect(result.books.map((book) => book.id)).toEqual(['BK-LOCAL', 'BK-SHEET'])
+  })
+
+  it('counts an identical row as unchanged and leaves it untouched', () => {
+    const local = makeBook()
+    const result = mergeSheetBooks([local], [{ ...local }], '2025-01-01T00:00:00.000Z')
+    expect(result.unchanged).toBe(1)
+    expect(result.updated).toHaveLength(0)
+    expect(result.added).toHaveLength(0)
+  })
+
+  it('is idempotent: merging the same sheet twice reports no changes the second time', () => {
+    const incoming = [makeBook({ id: 'BK-A', title: 'A' }), makeBook({ id: 'BK-B', title: 'B' })]
+    const first = mergeSheetBooks([], incoming, '2025-01-01T00:00:00.000Z')
+    const second = mergeSheetBooks(first.books, incoming, '2025-01-02T00:00:00.000Z')
+    expect(second.added).toHaveLength(0)
+    expect(second.updated).toHaveLength(0)
+    expect(second.unchanged).toBe(2)
+  })
+})
+
+/* ------------------------------- change tracking --------------------------- */
+
+describe('pending website edits', () => {
+  it('detects a local edit and ignores cosmetic fields', () => {
+    const book = makeBook()
+    const snapshot = snapshotBooks([book])
+    expect(pendingPushes([book], snapshot)).toHaveLength(0)
+
+    const retitled = { ...book, title: 'Edited on the site' }
+    const pending = pendingPushes([retitled], snapshot)
+    expect(pending).toHaveLength(1)
+    expect(pending[0].title).toBe('Edited on the site')
+
+    const cosmetic = { ...book, coverSeed: 777, tags: ['x'] }
+    expect(pendingPushes([cosmetic], snapshot)).toHaveLength(0)
+  })
+
+  it('fingerprints ignore sync metadata so a pull does not look like a site edit', () => {
+    const book = makeBook()
+    const stamped = { ...book, syncSource: 'sheet' as const, syncUpdatedAt: '2025-01-01T00:00:00.000Z' }
+    expect(bookFingerprint(stamped)).toBe(bookFingerprint(book))
+  })
+
+  it('never pushes a book whose last change came from the sheet', () => {
+    const book = makeBook({ syncSource: 'sheet' })
+    const snapshot = snapshotBooks([book])
+    const retitled = { ...book, title: 'Someone edited the sheet', syncSource: 'sheet' as const }
+    expect(pendingPushes([retitled], snapshot)).toHaveLength(0)
+  })
+
+  it('flags a newly added book as pending', () => {
+    const snapshot = snapshotBooks([makeBook({ id: 'BK-1' })])
+    const books = [makeBook({ id: 'BK-1' }), makeBook({ id: 'BK-2', title: 'New' })]
+    expect(pendingPushes(books, snapshot).map((book) => book.id)).toEqual(['BK-2'])
+  })
+})
+
+/* ---------------------------------- derived -------------------------------- */
+
+describe('derived columns written back to the sheet', () => {
+  it('recomputes availability from real loans', () => {
+    const data = createSeedData()
+    const book = data.books[0]
+    const rows = derivedRows(data.books, data)
+    const row = rows.find((item) => item['Book ID'] === book.id)
+    const onLoan = data.loans.filter((loan) => loan.bookId === book.id && loan.status === 'active').length
+    expect(row).toBeDefined()
+    expect(row?.['Copies on loan']).toBe(onLoan)
+    expect(row?.['Available copies']).toBe(Math.max(0, book.totalCopies - onLoan))
+  })
+
+  it('uses the seed catalogue consistently for a synthetic dataset', () => {
+    const data = {
+      ...createSeedData(),
+      loans: [],
+    } as LibraryData
+    const rows = derivedRows(data.books.slice(0, 3), data)
+    rows.forEach((row) => {
+      expect(row['Copies on loan']).toBe(0)
+      expect(row.Status).toBe('Active')
+    })
+  })
+})
+
+/* ----------------------------------- urls ---------------------------------- */
+
+describe('sheet and endpoint configuration', () => {
+  it('extracts the spreadsheet id and gid from a full URL', () => {
+    const ref = parseSheetUrl(
+      'https://docs.google.com/spreadsheets/d/18CGNA07OgL0TAH4mCVKz94AwQGx_Jc1jA2b_e-TfL3s/edit?usp=sharing',
+    )
+    expect(ref?.id).toBe('18CGNA07OgL0TAH4mCVKz94AwQGx_Jc1jA2b_e-TfL3s')
+    expect(ref?.gid).toBe('0')
+    expect(parseSheetUrl('18CGNA07OgL0TAH4mCVKz94AwQGx_Jc1jA2b_e-TfL3s')?.id).toBe(
+      '18CGNA07OgL0TAH4mCVKz94AwQGx_Jc1jA2b_e-TfL3s',
+    )
+    expect(parseSheetUrl('https://example.com/nope')).toBeNull()
+    expect(parseSheetUrl('')).toBeNull()
+  })
+
+  it('reads a specific tab when the URL carries a gid', () => {
+    const ref = parseSheetUrl('https://docs.google.com/spreadsheets/d/abc1234567890123456789012345678901234/edit#gid=12345')
+    expect(ref?.gid).toBe('12345')
+    expect(sheetCsvUrl(ref!)).toContain('gid=12345')
+  })
+
+  it('accepts only executable Apps Script URLs', () => {
+    expect(isAppsScriptUrl('https://script.google.com/macros/s/AKfycbx123/exec')).toBe(true)
+    expect(isAppsScriptUrl('https://script.google.com/macros/s/AKfycbx123/dev')).toBe(false)
+    expect(isAppsScriptUrl('https://example.com/exec')).toBe(false)
+  })
+
+  it('only attaches the shared secret when one is configured', () => {
+    expect(makePayload('ping').token).toBeUndefined()
+    expect(makePayload('upsert', [], 's3cret').token).toBe('s3cret')
+    expect(makePayload('ping', undefined, '').token).toBeUndefined()
+  })
+
+  it('formats sync timestamps for the UI', () => {
+    expect(formatDateTime('2026-10-23T16:05:00.000Z')).toBe('2026-10-23 16:05 UTC')
+    expect(formatDateTime('not-a-date')).toBe('not-a-date')
+  })
+})
+
+/* ------------------------------- realistic pull ---------------------------- */
+
+describe('full pull against a realistic sheet export', () => {
+  it('imports rows, honours the source tag and skips a header-only sheet', () => {
+    const headerOnly = parseCsv(`${USER_HEADER}\r\n`)
+    expect(csvToBooks(headerOnly).books).toHaveLength(0)
+
+    const fullHeader = `${USER_HEADER},Description,Last edited from,Last edited at`
+    const sheet = [
+      fullHeader,
+      'BK-1001,Clean Code,Robert C. Martin,978-0132350884,Prentice Hall,2008,Computer Science,A-01,3,1,2,Active,2025-01-05,Classic,' +
+        'Sheet,2025-02-01T10:00:00Z',
+      'BK-1002,"Dune",Frank Herbert,978-0441172719,Ace,1965,Fiction,A-02,2,0,2,Active,2025-01-06,,Website,2025-02-02T09:30:00Z',
+    ].join('\r\n')
+    const { books } = csvToBooks(parseCsv(sheet))
+    expect(books).toHaveLength(2)
+    expect(books[0].syncSource).toBe('sheet')
+    expect(books[1].syncSource).toBe('website')
+    expect(books[1].syncUpdatedAt).toBe('2025-02-02T09:30:00.000Z')
+
+    const merged = mergeSheetBooks([], books, '2025-03-01T00:00:00.000Z')
+    expect(merged.added).toHaveLength(2)
+    expect(merged.books[0].title).toBe('Clean Code')
+    expect(merged.books[1].title).toBe('Dune')
+  })
+
+  it('keeps a website edit pending until it is written back', () => {
+    const data = createSeedData()
+    const target = data.books[0]
+    const snapshot = snapshotBooks(data.books)
+    const edited = data.books.map((book) =>
+      book.id === target.id
+        ? { ...book, title: `${book.title} (2nd ed.)`, syncSource: 'website' as const, syncUpdatedAt: isoDaysFromNow(0) }
+        : book,
+    )
+    const pending = pendingPushes(edited, snapshot)
+    expect(pending).toHaveLength(1)
+    expect(pending[0].id).toBe(target.id)
+    expect(bookToSheetRecord(pending[0]).Title).toBe(`${target.title} (2nd ed.)`)
+  })
+})

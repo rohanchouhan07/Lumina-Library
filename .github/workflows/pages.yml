@@ -1,0 +1,61 @@
+name: Publish demo to GitHub Pages
+
+# Builds the frontend in DEMO mode (no backend URL, hash routing, relative asset paths)
+# and publishes it. Nothing secret is needed: the demo runs entirely in the browser.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lumina-library
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: lumina-library/package-lock.json
+
+      - run: npm ci
+
+      # Type-check and unit-test before publishing, so a broken commit never goes live.
+      - run: npx tsc -b
+      - run: npx vitest run
+
+      - name: Build (demo mode)
+        env:
+          # Empty on purpose: the published site must not point at a real deployment.
+          VITE_API_BASE_URL: ''
+          # Hash routing + relative base = deep links and assets work under /<repo>/ on Pages.
+          VITE_ROUTER: hash
+        run: npx vite build --base=./ --outDir dist-pages
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: lumina-library/dist-pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

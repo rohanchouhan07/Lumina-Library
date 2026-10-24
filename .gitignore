@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+dist-ssr/
+
+# local secrets and machine-specific config — never commit these
+.env
+.env.local
+*.local
+
+# scratch / evidence kept on this machine only
+qa-screens/
+qa-downloads/
+.cache/
+.local/
+.npm/
+.sudo_as_admin_successful
+*.log
+.DS_Store
+
+# Pages build artifact
+dist-pages/
+
+# browser/test noise
+.config/

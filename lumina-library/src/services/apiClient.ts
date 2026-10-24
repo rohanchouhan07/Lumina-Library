@@ -1,0 +1,258 @@
+import { API_BASE_URL, API_TIMEOUT_MS, IS_API_CONFIGURED, REMEMBER_STORAGE_KEY, SESSION_STORAGE_KEY } from '@/config/env'
+import { ApiError, type ApiEnvelope } from '@/types/api'
+
+/**
+ * The single network gateway.
+ *
+ * Apps Script Web Apps are called with `Content-Type: text/plain` so the request
+ * stays a CORS "simple request" (no preflight). The token is sent in the JSON
+ * body rather than an Authorization header for the same reason.
+ *
+ * No secrets live here: the token is an opaque, short-lived session handle.
+ */
+
+/* --------------------------------------------------------------- token store */
+
+type TokenListener = (token: string | null) => void
+
+let memoryToken: string | null = null
+const listeners = new Set<TokenListener>()
+
+function safeGet(storage: 'session' | 'local', key: string): string | null {
+  try {
+    return (storage === 'session' ? window.sessionStorage : window.localStorage).getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function safeSet(storage: 'session' | 'local', key: string, value: string | null) {
+  try {
+    const target = storage === 'session' ? window.sessionStorage : window.localStorage
+    if (value === null) target.removeItem(key)
+    else target.setItem(key, value)
+  } catch {
+    // Storage blocked (sandboxed preview) — the in-memory token still works for this tab.
+  }
+}
+
+export function getSessionToken(): string | null {
+  if (memoryToken) return memoryToken
+  const persistent = safeGet('local', SESSION_STORAGE_KEY)
+  const ephemeral = safeGet('session', SESSION_STORAGE_KEY)
+  memoryToken = persistent ?? ephemeral ?? null
+  return memoryToken
+}
+
+export function setSessionToken(token: string | null, remember = false) {
+  memoryToken = token
+  if (token === null) {
+    safeSet('local', SESSION_STORAGE_KEY, null)
+    safeSet('session', SESSION_STORAGE_KEY, null)
+    safeSet('local', REMEMBER_STORAGE_KEY, null)
+  } else {
+    safeSet(remember ? 'local' : 'session', SESSION_STORAGE_KEY, token)
+    safeSet('local', REMEMBER_STORAGE_KEY, String(remember))
+  }
+  listeners.forEach((listener) => listener(token))
+}
+
+export function isRemembered(): boolean {
+  return safeGet('local', REMEMBER_STORAGE_KEY) === 'true'
+}
+
+/** Subscribe to sign-in / sign-out / expiry. Returns an unsubscribe function. */
+export function onSessionChange(listener: TokenListener): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+/* ------------------------------------------------------------------- client */
+
+export function isBackendConfigured(): boolean {
+  return IS_API_CONFIGURED
+}
+
+interface RequestOptions {
+  /** Skip the bearer token (login/health). */
+  anonymous?: boolean
+  timeoutMs?: number
+}
+
+function normaliseNetworkError(error: unknown, timedOut: boolean): ApiError {
+  if (error instanceof ApiError) return error
+  if (timedOut) {
+    return new ApiError(
+      'TIMEOUT',
+      'The library server took too long to respond. Apps Script can take several seconds to wake up — retry once before assuming the connection is broken.',
+    )
+  }
+  return new ApiError(
+    'NETWORK_ERROR',
+    'Could not reach the library server. Check your internet connection, or ask the administrator whether the API is deployed.',
+  )
+}
+
+/**
+ * Actions that cannot mutate anything, so a retry is always safe.
+ *
+ * Apps Script occasionally answers with an HTML interstitial instead of JSON when it is
+ * cold, throttling, or briefly unavailable. Retrying a read hides that; retrying a write
+ * could duplicate it, so writes are never retried automatically — the caller sees the
+ * error and decides.
+ */
+const READ_ACTIONS = new Set([
+  'health',
+  'ping',
+  'bootstrap',
+  'auth.session',
+  // Sign-in is safely retryable: a first attempt whose response was lost leaves at most
+  // one extra session row, and the retry issues a fresh token.
+  'auth.login',
+  'books.list',
+  'books.get',
+  'users.list',
+  'users.me',
+  'loans.list',
+  'reservations.list',
+  'wishlist.list',
+  'settings.get',
+  'reports.dashboard',
+  'reports.analytics',
+  'activity.list',
+  'system.diagnostics',
+])
+
+/**
+ * Actions that run a password KDF on the server. Apps Script hashes ~2 ms per round, so
+ * these are the slowest calls in the system and get their own budget.
+ */
+const SLOW_ACTIONS = new Set(['auth.login', 'auth.changePassword', 'users.create', 'users.resetPassword'])
+const SLOW_TIMEOUT_MS = 60_000
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * POST an action to the backend. Every screen goes through this function, so
+ * timeouts, envelopes, error codes and auth expiry are handled in one place.
+ */
+export async function callApi<T>(
+  action: string,
+  payload: Record<string, unknown> = {},
+  options: RequestOptions = {},
+): Promise<T> {
+  try {
+    return await callOnce<T>(action, payload, options)
+  } catch (error) {
+    const retriable =
+      error instanceof ApiError && (error.code === 'MALFORMED_RESPONSE' || error.code === 'NETWORK_ERROR')
+    if (!retriable || !READ_ACTIONS.has(action)) throw error
+    // One quiet retry after a short pause — never for a write.
+    await sleep(600)
+    return callOnce<T>(action, payload, options)
+  }
+}
+
+async function callOnce<T>(
+  action: string,
+  payload: Record<string, unknown>,
+  options: RequestOptions,
+): Promise<T> {
+  if (!IS_API_CONFIGURED) {
+    throw new ApiError(
+      'NOT_CONFIGURED',
+      'No backend is configured. Set VITE_API_BASE_URL to your Apps Script Web App URL, or use the offline demo.',
+    )
+  }
+
+  const controller = new AbortController()
+  const budget = options.timeoutMs ?? (SLOW_ACTIONS.has(action) ? SLOW_TIMEOUT_MS : API_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), budget)
+  const token = options.anonymous ? null : getSessionToken()
+
+  let response: Response
+  try {
+    response = await fetch(API_BASE_URL, {
+      method: 'POST',
+      // text/plain keeps this a CORS "simple request" (Apps Script friendly).
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, payload, token }),
+      redirect: 'follow',
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+  } catch (error) {
+    throw normaliseNetworkError(error, controller.signal.aborted)
+  } finally {
+    clearTimeout(timeout)
+  }
+
+  if (!response.ok) {
+    throw new ApiError('SERVER_ERROR', `The server returned HTTP ${response.status}. Please retry.`, {
+      status: response.status,
+    })
+  }
+
+  let envelope: ApiEnvelope<T>
+  try {
+    envelope = (await response.json()) as ApiEnvelope<T>
+  } catch {
+    throw new ApiError(
+      'MALFORMED_RESPONSE',
+      'The server replied with something that is not valid JSON. Check that the deployed URL ends with /exec.',
+    )
+  }
+
+  if (!envelope.ok || envelope.error) {
+    const code = envelope.error?.code ?? 'SERVER_ERROR'
+    const message = envelope.error?.message ?? 'The request could not be completed.'
+    if (code === 'UNAUTHORIZED') setSessionToken(null)
+    throw new ApiError(code, message)
+  }
+
+  return envelope.data as T
+}
+
+export interface HealthProbe {
+  ok: boolean
+  message: string
+  latencyMs?: number
+  details?: unknown
+}
+
+/** Admin-facing connection check: does the configured backend answer? */
+export async function probeBackend(): Promise<HealthProbe> {
+  if (!IS_API_CONFIGURED) {
+    return { ok: false, message: 'No backend configured — running on local demo data.' }
+  }
+  const started = performance.now()
+  try {
+    const data = await callApi<{ service: string; version: string; time: string }>('health', {}, { anonymous: true })
+    return {
+      ok: true,
+      message: `${data.service} v${data.version} responded`,
+      latencyMs: Math.round(performance.now() - started),
+      details: data,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof ApiError ? error.message : 'Health check failed.',
+      latencyMs: Math.round(performance.now() - started),
+    }
+  }
+}
+
+export { ApiError }
+
+/** Human-readable message for any thrown error, safe to show in a toast. */
+export function describeApiError(error: unknown): string {
+  if (error instanceof ApiError) return error.message
+  if (error instanceof Error) return error.message
+  return 'Something went wrong. Please retry.'
+}
+
+/** True when a failure means the session is gone and the UI should return to /login. */
+export function isSessionExpired(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'UNAUTHORIZED'
+}
